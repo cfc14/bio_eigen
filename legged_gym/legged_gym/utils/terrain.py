@@ -70,7 +70,7 @@ class Terrain:
             self.vertices, self.triangles = terrain_utils.convert_heightfield_to_trimesh(   self.height_field_raw,
                                                                                             self.cfg.horizontal_scale,
                                                                                             self.cfg.vertical_scale,
-                                                                                            self.cfg.slope_treshold)
+                                                                                        self.cfg.slope_treshold)
     
     def randomized_terrain(self):
         for k in range(self.cfg.num_sub_terrains):
@@ -79,14 +79,14 @@ class Terrain:
 
             choice = np.random.uniform(0, 1)
             difficulty = np.random.choice([0.5, 0.75, 0.9])
-            terrain = self.make_terrain(choice, difficulty)
+            terrain = self.make_terrain(choice, 0.4)
             self.add_terrain_to_map(terrain, i, j)
         
     def curiculum(self):
         for j in range(self.cfg.num_cols):
             for i in range(self.cfg.num_rows):
-                difficulty = i / self.cfg.num_rows
-                choice = j / self.cfg.num_cols + 0.001
+                difficulty = i / self.cfg.num_rows*0.4
+                choice = j / self.cfg.num_cols*0.4
 
                 terrain = self.make_terrain(choice, difficulty)
                 self.add_terrain_to_map(terrain, i, j)

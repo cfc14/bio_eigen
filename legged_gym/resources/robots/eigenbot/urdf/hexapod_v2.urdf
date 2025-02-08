@@ -17,6 +17,7 @@
     </inertial>
     <visual>
       <geometry>
+        <!-- <origin rpy="0 1.57 0" xyz="-0.045 0 -0.063"/> -->
         <mesh filename="../meshes/Eigenbody.STL" scale="1 1 1"/>
       </geometry>
     </visual>

@@ -78,6 +78,7 @@ class Logger:
         a.legend()
         # plot joint velocity
         a = axs[1, 1]
+        
         if log["dof_vel"]: a.plot(time, log["dof_vel"], label='measured')
         if log["dof_vel_target"]: a.plot(time, log["dof_vel_target"], label='target')
         a.set(xlabel='time [s]', ylabel='Velocity [rad/s]', title='Joint Velocity')

@@ -67,6 +67,7 @@ class LeggedRobot(BaseTask):
         self.height_samples = None
         self.debug_viz = False
         self.init_done = False
+
         self._parse_cfg(self.cfg)
         super().__init__(self.cfg, sim_params, physics_engine, sim_device, headless)
 
@@ -331,6 +332,7 @@ class LeggedRobot(BaseTask):
         if self.cfg.commands.heading_command:
             forward = quat_apply(self.base_quat, self.forward_vec)
             heading = torch.atan2(forward[:, 1], forward[:, 0])
+            #heading=0 
             self.commands[:, 2] = torch.clip(0.5*wrap_to_pi(self.commands[:, 3] - heading), -1., 1.)
 
         if self.cfg.terrain.measure_heights:
@@ -338,21 +340,43 @@ class LeggedRobot(BaseTask):
         if self.cfg.domain_rand.push_robots and  (self.common_step_counter % self.cfg.domain_rand.push_interval == 0):
             self._push_robots()
 
+    # def _resample_commands(self, env_ids):
+    #     """ Randommly select commands of some environments
+
+    #     Args:
+    #         env_ids (List[int]): Environments ids for which new commands are needed
+    #     """
+    #     self.commands[env_ids, 0] = torch_rand_float(self.command_ranges["lin_vel_x"][0], self.command_ranges["lin_vel_x"][1], (len(env_ids), 1), device=self.device).squeeze(1)
+    #     #self.commands[env_ids, 1] = torch_rand_float(self.command_ranges["lin_vel_y"][0], self.command_ranges["lin_vel_y"][1], (len(env_ids), 1), device=self.device).squeeze(1)
+    #     self.commands[env_ids, 1] = torch_rand_float(0, 0, (len(env_ids), 1), device=self.device).squeeze(1)
+    #     if self.cfg.commands.heading_command:
+    #         self.commands[env_ids, 3] = torch_rand_float(self.command_ranges["heading"][0], self.command_ranges["heading"][1], (len(env_ids), 1), device=self.device).squeeze(1)
+    #     else:
+    #         self.commands[env_ids, 2] = torch_rand_float(self.command_ranges["ang_vel_yaw"][0], self.command_ranges["ang_vel_yaw"][1], (len(env_ids), 1), device=self.device).squeeze(1)
+
+    #     # set small commands to zero
+    #     self.commands[env_ids, :2] *= (torch.norm(self.commands[env_ids, :2], dim=1) > 0.2).unsqueeze(1)
     def _resample_commands(self, env_ids):
-        """ Randommly select commands of some environments
+    # Preserve linear velocities along the current heading
+        forward = quat_apply(self.base_quat, self.forward_vec)
+        heading = torch.atan2(forward[:, 1], forward[:, 0])
 
-        Args:
-            env_ids (List[int]): Environments ids for which new commands are needed
-        """
-        self.commands[env_ids, 0] = torch_rand_float(self.command_ranges["lin_vel_x"][0], self.command_ranges["lin_vel_x"][1], (len(env_ids), 1), device=self.device).squeeze(1)
-        self.commands[env_ids, 1] = torch_rand_float(self.command_ranges["lin_vel_y"][0], self.command_ranges["lin_vel_y"][1], (len(env_ids), 1), device=self.device).squeeze(1)
+    # Resample linear velocities (x and y) based on the current heading direction
+        lin_vel_mag = torch_rand_float(self.command_ranges["lin_vel_x"][0], self.command_ranges["lin_vel_x"][1], (len(env_ids), 1), device=self.device).squeeze(1)
+    
+    # Apply the heading direction to velocity components
+        self.commands[env_ids, 0] = lin_vel_mag * torch.cos(heading[env_ids])  # x component
+        self.commands[env_ids, 1] = lin_vel_mag * torch.sin(heading[env_ids])  # y component
+    
+    # Resample or adjust heading if required, ensuring the bot keeps going in the same direction
         if self.cfg.commands.heading_command:
-            self.commands[env_ids, 3] = torch_rand_float(self.command_ranges["heading"][0], self.command_ranges["heading"][1], (len(env_ids), 1), device=self.device).squeeze(1)
+            self.commands[env_ids, 3] = heading[env_ids]  # Keep heading as current heading
         else:
-            self.commands[env_ids, 2] = torch_rand_float(self.command_ranges["ang_vel_yaw"][0], self.command_ranges["ang_vel_yaw"][1], (len(env_ids), 1), device=self.device).squeeze(1)
+            self.commands[env_ids, 2] = torch.clip(0.5 * wrap_to_pi(self.commands[env_ids, 3] - heading[env_ids]), -1., 1.)
 
-        # set small commands to zero
+    # Set small velocity commands to zero
         self.commands[env_ids, :2] *= (torch.norm(self.commands[env_ids, :2], dim=1) > 0.2).unsqueeze(1)
+
 
     def _compute_torques(self, actions):
         """ Compute torques from actions.
@@ -533,6 +557,9 @@ class LeggedRobot(BaseTask):
         self.base_lin_vel = quat_rotate_inverse(self.base_quat, self.root_states[:, 7:10])
         self.base_ang_vel = quat_rotate_inverse(self.base_quat, self.root_states[:, 10:13])
         self.projected_gravity = quat_rotate_inverse(self.base_quat, self.gravity_vec)
+        # Add this to the constructor of the LeggedRobot class
+        self.leg_contact_time = torch.zeros(self.num_envs, len(self.feet_indices), device=self.device)
+
         if self.cfg.terrain.measure_heights:
             self.height_points = self._init_height_points()
         self.measured_heights = 0
@@ -832,6 +859,61 @@ class LeggedRobot(BaseTask):
     def _reward_lin_vel_z(self):
         # Penalize z axis base linear velocity
         return torch.square(self.base_lin_vel[:, 2])
+    def _reward_lin_vel_x(self):
+        # Penalize z axis base linear velocity
+        return torch.square(self.base_lin_vel[:, 0])
+    def _reward_lin_vel_y(self):
+        # Penalize z axis base linear velocity
+        return torch.square(self.base_lin_vel[:, 1])
+    
+    # def _reward_lin_vel_y(self):
+    #     # Penalize z axis base linear velocity
+    #     return torch.square(self.base_lin_vel[:, 1])
+    # def _reward_lin_vel_heading(self):
+    #     # Calculate forward direction
+    #     forward = quat_apply(self.base_quat, self.forward_vec)
+        
+    #     # Calculate heading angle
+    #     heading = torch.atan2(forward[:, 1], forward[:, 0])
+        
+    #     # Calculate the velocity in the direction of the heading
+    #     vel_direction = torch.atan2(self.base_lin_vel[:, 1], self.base_lin_vel[:, 0])
+        
+    #     # Reward for velocity alignment with heading
+    #     vel_alignment = torch.cos(heading - vel_direction)
+        
+    #     # Reward scaled by the magnitude of velocity in the direction of the heading
+    #     vel_magnitude = torch.norm(self.base_lin_vel[:, :2], dim=1)
+    #     reward = vel_alignment * vel_magnitude
+
+    #     return reward
+
+    def _reward_lin_vel_heading(self):
+    # Calculate forward direction
+        forward = quat_apply(self.base_quat, self.forward_vec)
+        
+        # Calculate heading angle
+        heading = torch.atan2(forward[:, 1], forward[:, 0])
+        
+        # Calculate the velocity in the direction of the heading
+        vel_direction = torch.atan2(self.base_lin_vel[:, 1], self.base_lin_vel[:, 0])
+        
+        # Reward for velocity alignment with heading
+        vel_alignment = torch.cos(heading - vel_direction)
+        
+        # Penalize misalignment (negative cos gives low reward for large angular difference)
+        return vel_alignment
+    def _reward_velocity_magnitude(self):
+        # Calculate the magnitude of the base linear velocity in the horizontal plane
+        vel_magnitude = torch.norm(self.base_lin_vel[:, :2], dim=1)
+        
+        # Reward based on velocity magnitude
+        magnitude_reward = vel_magnitude
+        
+        return magnitude_reward
+
+
+    
     
     def _reward_ang_vel_xy(self):
         # Penalize xy axes base angular velocity
@@ -883,6 +965,7 @@ class LeggedRobot(BaseTask):
 
     def _reward_torque_limits(self):
         # penalize torques too close to the limit
+        # import ipdb;ipdb.set_trace()
         return torch.sum((torch.abs(self.torques) - self.torque_limits*self.cfg.rewards.soft_torque_limit).clip(min=0.), dim=1)
 
     def _reward_tracking_lin_vel(self):
@@ -907,6 +990,85 @@ class LeggedRobot(BaseTask):
         rew_airTime *= torch.norm(self.commands[:, :2], dim=1) > 0.1 #no reward for zero command
         self.feet_air_time *= ~contact_filt
         return rew_airTime
+    # def _reward_three_feet_on_ground(self):
+    # # Reward for having exactly 3 feet on the ground
+    # # Need to filter the contacts because the contact reporting of PhysX is unreliable on meshes
+    #     contact = self.contact_forces[:, self.feet_indices, 2] > 1.
+    #     contact_filt = torch.logical_or(contact, self.last_contacts)
+    #     self.last_contacts = contact
+
+    # # Count the number of feet in contact with the ground
+    #     num_contacts = torch.sum(contact_filt, dim=1)
+
+    # # Reward if exactly 3 feet are in contact with the ground
+    #     rew_three_feet = (num_contacts == 3).float()
+
+    # # Add scaling to the reward based on the command's norm
+    #     rew_three_feet *= torch.norm(self.commands[:, :2], dim=1) > 0.1  # no reward for zero command
+
+    # # Reset air time for feet in contact
+    #     self.feet_air_time *= ~contact_filt
+
+    #     return rew_three_feet
+
+    # def _reward_no_leg_dragging(self):
+    #     # Identify legs in contact with the ground
+    #     contact = self.contact_forces[:, self.feet_indices, 2] > 1.
+    #     contact_filt = torch.logical_or(contact, self.last_contacts)
+    #     self.last_contacts = contact
+
+    #     # Increment a "contact time" counter for each foot in contact
+    #     self.leg_contact_time += self.dt * contact_filt
+
+    #     # Penalize legs that have been dragging (in contact for too long, e.g., >1 second)
+    #     dragging_penalty = torch.sum((self.leg_contact_time > 1.0).float(), dim=1) * -1.0
+
+    #     # Reset the contact time for feet that are no longer in contact with the ground
+    #     self.leg_contact_time *= ~contact_filt
+
+    #     # Apply a scaling based on the command's norm (no penalty for zero movement commands)
+    #     dragging_penalty *= torch.norm(self.commands[:, :2], dim=1) > 0.1
+
+    #     return dragging_penalty
+
+    # def _reward_no_leg_hovering(self):
+    #     # Identify legs in contact with the ground
+    #     contact = self.contact_forces[:, self.feet_indices, 2] > 1.
+    #     contact_filt = torch.logical_or(contact, self.last_contacts)
+    #     self.last_contacts = contact
+
+    #     # Increment a "contact time" counter for each foot in contact
+    #     self.leg_contact_time += self.dt * contact_filt
+
+       
+    #     # Penalize legs that are hovering (not in contact for too long, e.g., >0.5 seconds)
+    #     hover_time = self.dt * ~contact_filt
+    #     hovering_penalty = torch.sum((hover_time > 1.5).float(), dim=1) * -1.0
+
+        
+
+    #     # Reset the contact time for feet that are no longer in contact with the ground
+    #     self.leg_contact_time *= ~contact_filt
+
+    #     # Apply a scaling based on the command's norm (no penalty for zero movement commands)
+    #     total_penalty = (hovering_penalty) * (torch.norm(self.commands[:, :2], dim=1) > 0.1)
+
+    #     return total_penalty
+    # def _reward_balanced_leg_contact(self):
+    #     avg_contact_time = self.leg_contact_time.mean(dim=1, keepdim=True) + 1e-6  # Avoid division issues
+    #     deviation_from_avg = torch.abs(self.leg_contact_time - avg_contact_time)
+        
+    #     # Use tanh instead of exp to avoid overflow issues
+    #     balanced_contact_reward = torch.tanh(-deviation_from_avg.mean(dim=1) * 0.1)
+
+    #     return balanced_contact_reward
+
+
+
+
+
+
+
     
     def _reward_stumble(self):
         # Penalize feet hitting vertical surfaces
@@ -920,3 +1082,27 @@ class LeggedRobot(BaseTask):
     def _reward_feet_contact_forces(self):
         # penalize high contact forces
         return torch.sum((torch.norm(self.contact_forces[:, self.feet_indices, :], dim=-1) -  self.cfg.rewards.max_contact_force).clip(min=0.), dim=1)
+    # def _reward_no_standing_still(self):
+    #     """
+    #     Penalizes the robot for prolonged periods of inactivity where all feet remain stationary.
+    #     Encourages continuous motion by evaluating foot dynamics.
+    #     """
+    #     # Identify feet in contact with the ground
+    #     contact = self.contact_forces[:, self.feet_indices, 2] > 1.
+    #     contact_filt = torch.logical_or(contact, self.last_contacts)  # Filter unreliable contacts
+    #     self.last_contacts = contact
+
+    #     # Calculate air time for feet
+    #     air_time = self.dt * ~contact_filt
+
+    #     # Check if all feet are stationary (no air time or contact change for all feet)
+    #     all_feet_stationary = torch.all(contact_filt, dim=1)
+
+    #     # Penalize if the robot remains stationary (all feet stationary and no motion commands)
+    #     standing_penalty = all_feet_stationary.float() * -1.0
+
+    #     # Scale penalty based on movement command norm
+    #     standing_penalty *= (torch.norm(self.commands[:, :2], dim=1) > 0.1).float()
+
+    #     return standing_penalty
+
