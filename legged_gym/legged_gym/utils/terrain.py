@@ -78,15 +78,24 @@ class Terrain:
             (i, j) = np.unravel_index(k, (self.cfg.num_rows, self.cfg.num_cols))
 
             choice = np.random.uniform(0, 1)
+            
+            #
             difficulty = np.random.choice([0.5, 0.75, 0.9])
-            terrain = self.make_terrain(choice, 0.4)
+            if not self.cfg.rough_flat:
+                choice = 0
+                difficulty = 0
+            terrain = self.make_terrain(choice, difficulty)
             self.add_terrain_to_map(terrain, i, j)
         
     def curiculum(self):
         for j in range(self.cfg.num_cols):
             for i in range(self.cfg.num_rows):
-                difficulty = i / self.cfg.num_rows*0.4
-                choice = j / self.cfg.num_cols*0.4
+                multiplier = 0.0
+                if self.cfg.rough_flat:
+                    multiplier = 0.4
+                # import ipdb;ipdb.set_trace()
+                difficulty = i / self.cfg.num_rows*multiplier
+                choice = j / self.cfg.num_cols*multiplier
 
                 terrain = self.make_terrain(choice, difficulty)
                 self.add_terrain_to_map(terrain, i, j)

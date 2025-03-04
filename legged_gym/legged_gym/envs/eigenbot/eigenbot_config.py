@@ -1,31 +1,31 @@
 from legged_gym.envs.base.legged_robot_config import LeggedRobotCfg, LeggedRobotCfgPPO
 import torch
+import numpy as np
 
 class EigenbotRoughCfg( LeggedRobotCfg ):
     class init_state( LeggedRobotCfg.init_state ):
         pos = [0.0, 0.0, 0.42] # x,y,z [m]
         default_joint_angles = { # = target angles [rad] when action = 0.0
-            'bendy_joint_M1_S1': 0.0,   # [rad]
+            'bendy_joint_M1_S1': -np.pi/4,   # [rad]
             'bendy_joint_M2_S2': 0.0,   # [rad]
-            'bendy_joint_M3_S3': 0.0,
-            'bendy_joint_M4_S4': 0.0,
+            'bendy_joint_M3_S3': np.pi/4,
+            'bendy_joint_M4_S4': -np.pi/4,
             'bendy_joint_M5_S5': 0.0,
-            'bendy_joint_M6_S6': 0.0,
-            'bendy_joint_M7_S7': 0.0,
-            'bendy_joint_M8_S8': 0.0,
-            'bendy_joint_M9_S9': 0.0,
-            'bendy_joint_M10_S10': 0.0,
-            'bendy_joint_M11_S11': 0.0,
-            'bendy_joint_M12_S12': 0.0,
-            'bendy_joint_M13_S13': 0.0,
-            'bendy_joint_M14_S14': 0.0,
-            'bendy_joint_M15_S15': 0.0,
-            'bendy_joint_M16_S16': 0.0,
-            'bendy_joint_M17_S17': 0.0,
-            'bendy_joint_M18_S18': 0.0,
+            'bendy_joint_M6_S6': np.pi/4,
+            'bendy_joint_M7_S7': np.pi/4,
+            'bendy_joint_M8_S8': np.pi/4,
+            'bendy_joint_M9_S9': np.pi/4,
+            'bendy_joint_M10_S10': np.pi/4,
+            'bendy_joint_M11_S11': np.pi/4,
+            'bendy_joint_M12_S12': np.pi/4,
+            'bendy_joint_M13_S13': np.pi/4,
+            'bendy_joint_M14_S14': np.pi/4,
+            'bendy_joint_M15_S15': np.pi/4,
+            'bendy_joint_M16_S16': np.pi/4,
+            'bendy_joint_M17_S17': np.pi/4,
+            'bendy_joint_M18_S18': np.pi/4,
             
             }
-
     class control( LeggedRobotCfg.control ):
         # PD Drive parameters:
         control_type = 'P'
@@ -50,9 +50,10 @@ class EigenbotRoughCfg( LeggedRobotCfg ):
   
     class rewards( LeggedRobotCfg.rewards ):
         soft_dof_pos_limit = 0.9
-        base_height_target = 0.25
+        # base_height_target = 0.25
+        base_height_target = 0.15
         soft_torque_limit=1.
-        soft_dof_vel_limit= 1.5
+        soft_dof_vel_limit= 2.5 #1.5
         class scales( LeggedRobotCfg.rewards.scales ):
             torques = -0.0002
             dof_pos_limits = -10.0

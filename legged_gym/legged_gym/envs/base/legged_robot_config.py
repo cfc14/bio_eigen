@@ -33,7 +33,9 @@ from .base_config import BaseConfig
 class LeggedRobotCfg(BaseConfig):
     class env:
         num_envs = 4096
-        num_observations = 253
+        # num_observations = 253
+        # num_observations = 258
+        num_observations = 256
         num_privileged_obs = None # if not None a priviledge_obs_buf will be returned by step() (critic obs for assymetric training). None is returned otherwise 
         num_actions = 12
         env_spacing = 3.  # not used with heightfields/trimeshes 
@@ -64,6 +66,7 @@ class LeggedRobotCfg(BaseConfig):
         terrain_proportions = [0.1, 0.1, 0.35, 0.25, 0.2]
         # trimesh only:
         slope_treshold = 0.75 # slopes above this threshold will be corrected to vertical surfaces
+        rough_flat = False
 
     class commands:
         curriculum = False
@@ -72,8 +75,8 @@ class LeggedRobotCfg(BaseConfig):
         resampling_time = 10. # time before command are changed[s]
         heading_command = True # if true: compute ang vel command from heading error
         class ranges:
-            lin_vel_x = [-1, 1] # min max [m/s]
-            lin_vel_y = [-1.0, 1.0]   # min max [m/s]
+            lin_vel_x = [0., 1.] # min max [m/s]
+            lin_vel_y = [0., 0.]   # min max [m/s]
             ang_vel_yaw = [-1, 1]    # min max [rad/s]
             heading = [-3.14, 3.14]
 
@@ -108,7 +111,7 @@ class LeggedRobotCfg(BaseConfig):
         default_dof_drive_mode = 3 # see GymDofDriveModeFlags (0 is none, 1 is pos tgt, 2 is vel tgt, 3 effort)
         self_collisions = 0 # 1 to disable, 0 to enable...bitwise filter
         replace_cylinder_with_capsule = True # replace collision cylinders with capsules, leads to faster/more stable simulation
-        flip_visual_attachments = True # Some .obj meshes must be flipped from y-up to z-up
+        flip_visual_attachments = False # Some .obj meshes must be flipped from y-up to z-up
         
         density = 0.001
         angular_damping = 0.
@@ -130,27 +133,46 @@ class LeggedRobotCfg(BaseConfig):
     class rewards:
         class scales:
             termination = -1.0
-            tracking_lin_vel = 2.0
-            tracking_ang_vel = 0.5
-            lin_vel_z = -1
+            # tracking_lin_vel = 2.0
+
+            # tracking_goal_vel = 2.0 # for flat
+            # delta_yaw = 1.2#0.75 # for flat
+
+            tracking_goal_vel = 3.0 # for terrain
+            delta_yaw = 1.2#0.75
+
+            # tracking_ang_vel = 0.5
+            # lin_vel_z = -2#-1 for flat
+            lin_vel_z = -0.5 # for terrain
+
             lin_vel_x = 0
             lin_vel_y = 0
-            lin_vel_heading=1.0
-            velocity_magnitude=0.5
+            # lin_vel_heading= 2.
+            
+            #velocity_magnitude=0.5 # why is this here??
             #lin_vel_y= -2.0
-            ang_vel_xy = -0.05
-            orientation = -0.5
+            # ang_vel_xy = -1.0#-0.05 for flat
+            ang_vel_xy = -0.05 # for terrain
+
+            
+            orientation = -0.5 # for terrain
+            # orientation = -1.5 # for flat
+
             torques = -0.00001
-            dof_vel = -0.
+            dof_vel = 0.
             dof_acc = -2.5e-7
-            base_height = -0.15
-            feet_air_time = 0.87
+            base_height = -0.25
+            # feet_air_time = 0.5#1.
+            # feet_air_time = 0.75#1.
+            feet_air_time = 0.9#1.
+
+
             # three_feet_on_ground=0.3
             #no_leg_dragging=-0.3
             #no_leg_hovering=-0.3
             collision = -1.
             #balanced_leg_contact=0.2
-            stumble = -0.5
+            stumble = -1.0#-0.5
             action_rate = -0.01
             stand_still = -0.5
 
@@ -159,8 +181,9 @@ class LeggedRobotCfg(BaseConfig):
         soft_dof_pos_limit = 1. # percentage of urdf limits, values above this limit are penalized
         soft_dof_vel_limit = 1.5
         soft_torque_limit = 1.
-        base_height_target = 1.
+        base_height_target = 0.2
         max_contact_force = 100. # forces above this value are penalized
+        vel_tracking_reward = "tracking_goal_vel"
 
     class normalization:
         class obs_scales:
@@ -177,6 +200,7 @@ class LeggedRobotCfg(BaseConfig):
         noise_level = 1.0 # scales other values
         class noise_scales:
             dof_pos = 0.01
+            orientation = 0.03
             dof_vel = 1.5
             lin_vel = 0.1
             ang_vel = 0.2
@@ -188,6 +212,7 @@ class LeggedRobotCfg(BaseConfig):
         ref_env = 0
         pos = [10, 0, 6]  # [m]
         lookat = [11., 5, 3.]  # [m]
+        show_heading=False
 
     class sim:
         dt =  0.005
@@ -230,7 +255,8 @@ class LeggedRobotCfgPPO(BaseConfig):
         num_learning_epochs = 5
         num_mini_batches = 4 # mini batch size = num_envs*nsteps / nminibatches
         learning_rate = 1.e-3 #5.e-4
-        schedule = 'adaptive' # could be adaptive, fixed
+        schedule = 'adaptive' # could be adaptive, fixed        run_name = 'Trained_on_curriculum_terrain_feet_air_time_0.75_with_no_y_component'
+
         gamma = 0.99
         lam = 0.95
         desired_kl = 0.01
@@ -245,9 +271,11 @@ class LeggedRobotCfgPPO(BaseConfig):
         # logging
         save_interval = 50 # check for potential saves every this many iterations
         experiment_name = 'test'
-        run_name = 'Trained_on_flat_terrain_over_Oct28_commanded_vel_0.25-0.37'
+        # run_name = 'Trained_on_flat_terrain_fresh-airtime_0_5-parkour_obs_no_yawvel-heading_reward_1_2'
+        run_name = ''
+
         # load and resume
-        resume = True
-        load_run = -1 # -1 = last run
+        resume = False
+        load_run = -1# -1 = last run
         checkpoint = -1 # -1 = last saved model
         resume_path = None # updated from load_run and chkpt

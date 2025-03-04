@@ -48,6 +48,36 @@ from legged_gym.utils.math import quat_apply_yaw, wrap_to_pi, torch_rand_sqrt_fl
 from legged_gym.utils.helpers import class_to_dict
 from .legged_robot_config import LeggedRobotCfg
 
+
+def euler_from_quaternion(quat_angle):
+        """
+        Convert a quaternion into euler angles (roll, pitch, yaw)
+        roll is rotation around x in radians (counterclockwise)
+        pitch is rotation around y in radians (counterclockwise)
+        yaw is rotation around z in radians (counterclockwise)
+        """
+        x = quat_angle[:,0]; y = quat_angle[:,1]; z = quat_angle[:,2]; w = quat_angle[:,3]
+        t0 = +2.0 * (w * x + y * z)
+        t1 = +1.0 - 2.0 * (x * x + y * y)
+        roll_x = torch.atan2(t0, t1)
+     
+        t2 = +2.0 * (w * y - z * x)
+        t2 = torch.clip(t2, -1, 1)
+        pitch_y = torch.asin(t2)
+     
+        t3 = +2.0 * (w * z + x * y)
+        t4 = +1.0 - 2.0 * (y * y + z * z)
+        yaw_z = torch.atan2(t3, t4)
+     
+        return roll_x, pitch_y, yaw_z # in radians
+
+def heading_vector_from_yaw(yaw_tensor):
+    """
+    Given a yaw angle tensor (Nx1), return the 2D unit heading vectors as an Nx2 tensor.
+    """
+    x = torch.cos(yaw_tensor)
+    y = torch.sin(yaw_tensor)
+    return torch.stack((x, y), dim=1)  # Stack along the second dimension to get an Nx2 tensor
 class LeggedRobot(BaseTask):
     def __init__(self, cfg: LeggedRobotCfg, sim_params, physics_engine, sim_device, headless):
         """ Parses the provided config file,
@@ -67,6 +97,7 @@ class LeggedRobot(BaseTask):
         self.height_samples = None
         self.debug_viz = False
         self.init_done = False
+        
 
         self._parse_cfg(self.cfg)
         super().__init__(self.cfg, sim_params, physics_engine, sim_device, headless)
@@ -74,6 +105,20 @@ class LeggedRobot(BaseTask):
         if not self.headless:
             self.set_camera(self.cfg.viewer.pos, self.cfg.viewer.lookat)
         self._init_buffers()
+        # Given mode (mx) value for Rayleigh distribution
+        mx = 0.01
+        sigma = mx / np.sqrt(2 * np.log(2))
+
+        # Initialize per-joint delays with first Rayleigh sample
+        self.joint_delays = np.clip(np.random.rayleigh(sigma, 18),0,0.2)  # Initial delays
+        self.timestep=0
+
+
+        # Initialize joint counters as the delays themselves
+        self.joint_counters = self.joint_delays.copy()
+        for i in range(0,18,3):
+            self.joint_counters[i+1]+=self.joint_counters[i]
+            self.joint_counters[i+2]+=self.joint_counters[i+1]
         self._prepare_reward_function()
         self.init_done = True
 
@@ -83,8 +128,61 @@ class LeggedRobot(BaseTask):
         Args:
             actions (torch.Tensor): Tensor of shape (num_envs, num_actions_per_env)
         """
+        num_joints = 18
+        num_legs = 6
+        joints_per_leg = 3
+
+        dt = 0.005  # Simulation timestep
+
+        # Given mode (mx) value for Rayleigh distribution
+        mx = 0.01
+        sigma = mx / np.sqrt(2 * np.log(2))
+        self.nn_actions = actions
+        
+
+        # # **Fill the buffer for the first 5 timesteps**
+        # if self.timestep < 1:
+        #     self.action_delay_buffer[:, :, self.timestep] = actions
+        # else:
+        #     # Loop through each joint asynchronously
+        #     for joint in range(num_joints):
+        #         self.joint_counters[joint] -= dt  # Reduce counter by dt each step
+
+        #         if self.joint_counters[joint] <= 0:  # If counter reaches zero, execute action
+        #             # Apply the oldest action from the buffer
+        #             #actions = self.action_delay_buffer[:, joint, 0]
+
+        #             # Shift the buffer **only for this joint** (FIFO behavior)
+        #             #self.action_delay_buffer[:, joint, :-1] = self.action_delay_buffer[:, joint, 1:]
+        #             self.action_delay_buffer[:, joint, -1] = actions[:, joint]  # Insert new action
+
+        #             # Generate a new delay for this joint
+        #             new_delay = np.clip(np.random.rayleigh(sigma),0,0.2)
+        #             self.joint_delays[joint] = new_delay  # Store latest delay
+
+        #             # Identify the leg this joint belongs to
+        #             leg_index = joint // joints_per_leg  # Each leg has 3 joints
+        #             base_index = leg_index * joints_per_leg  # First joint of this leg
+
+        #             # Accumulate previous joint delays in the same leg
+        #             accumulated_delay = new_delay  # Start with own new delay
+        #             if joint == base_index + 1:  # Second joint in leg
+        #                 accumulated_delay += self.joint_delays[base_index]  # Add J1's delay
+        #             elif joint == base_index + 2:  # Third joint in leg
+        #                 accumulated_delay += self.joint_delays[base_index] + self.joint_delays[base_index + 1]  # Add J1 + J2 delays
+
+        #             # Reset the counter with the accumulated delay
+        #             self.joint_counters[joint] = accumulated_delay
+
+        # # Increment timestep counter
+        # self.timestep += 1
+        #actions=self.action_delay_buffer[:,:,0]
+
+        # Clip actions based on config constraints
         clip_actions = self.cfg.normalization.clip_actions
         self.actions = torch.clip(actions, -clip_actions, clip_actions).to(self.device)
+        # clip_nn_actions = self.cfg.normalization.clip_actions
+        # self.nn_actions = torch.clip(self.nn_actions, -clip_nn_actions, clip_nn_actions).to(self.device)
         # step physics and render each frame
         self.render()
         for _ in range(self.cfg.control.decimation):
@@ -117,8 +215,15 @@ class LeggedRobot(BaseTask):
         # prepare quantities
         self.base_quat[:] = self.root_states[:, 3:7]
         self.base_lin_vel[:] = quat_rotate_inverse(self.base_quat, self.root_states[:, 7:10])
+        
         self.base_ang_vel[:] = quat_rotate_inverse(self.base_quat, self.root_states[:, 10:13])
         self.projected_gravity[:] = quat_rotate_inverse(self.base_quat, self.gravity_vec)
+
+        self.roll, self.pitch, self.yaw = euler_from_quaternion(self.base_quat)
+
+        contact = torch.norm(self.contact_forces[:, self.feet_indices], dim=-1) > 2.
+        self.contact_filt = torch.logical_or(contact, self.last_contacts) 
+        self.last_contacts = contact
 
         self._post_physics_step_callback()
 
@@ -210,13 +315,39 @@ class LeggedRobot(BaseTask):
     def compute_observations(self):
         """ Computes observations
         """
+        imu_obs = torch.stack((self.roll, self.pitch), dim=1)
+
+        current_heading = self.compute_yaw()
+        commanded_heading = self.commands[ :, 3]
+        delta_yaw = (commanded_heading - current_heading)[:,None]
+        self.flat=1
+
+        flat_tensor = (torch.ones(self.num_envs, device=self.device, requires_grad=False) * self.flat)[:,None]
+        not_flat_tensor = (torch.ones(self.num_envs, device=self.device, requires_grad=False)  * self.flat)[:,None]
+        #import ipdb; ipdb.set_trace()
+
+
+        # self.obs_buf = torch.cat((  self.base_lin_vel * self.obs_scales.lin_vel,
+        #                             self.base_ang_vel  * self.obs_scales.ang_vel,
+        #                             self.projected_gravity,
+        #                             self.commands[:, :3] * self.commands_scale,
+        #                             (self.dof_pos - self.default_dof_pos) * self.obs_scales.dof_pos,
+        #                             self.dof_vel * self.obs_scales.dof_vel,
+        #                             self.actions,
+        #                             ),dim=-1)
         self.obs_buf = torch.cat((  self.base_lin_vel * self.obs_scales.lin_vel,
                                     self.base_ang_vel  * self.obs_scales.ang_vel,
+                                    imu_obs,
+                                    delta_yaw,
                                     self.projected_gravity,
-                                    self.commands[:, :3] * self.commands_scale,
+                                    self.commands[:, 0:1] * self.commands_scale,
+                                    # self.commands[:, :3] * self.commands_scale,
                                     (self.dof_pos - self.default_dof_pos) * self.obs_scales.dof_pos,
                                     self.dof_vel * self.obs_scales.dof_vel,
-                                    self.actions
+                                    flat_tensor,                        # [batch_size, 1]
+                                    not_flat_tensor,
+                                    self.actions,
+                                    self.contact_filt.float()-0.5
                                     ),dim=-1)
         # add perceptive inputs if not blind
         if self.cfg.terrain.measure_heights:
@@ -228,6 +359,7 @@ class LeggedRobot(BaseTask):
         if self.add_noise:
         #     print(f"obs_buf shape: {self.obs_buf.shape}")
         #     print(f"noise_scale_vec shape: {self.noise_scale_vec.shape}")
+            #import ipdb; ipdb.set_trace()
             self.obs_buf += (2 * torch.rand_like(self.obs_buf) - 1) * self.noise_scale_vec
 
     def create_sim(self):
@@ -329,6 +461,11 @@ class LeggedRobot(BaseTask):
         # 
         env_ids = (self.episode_length_buf % int(self.cfg.commands.resampling_time / self.dt)==0).nonzero(as_tuple=False).flatten()
         self._resample_commands(env_ids)
+        #self._draw_commanded_velocities(env_ids)
+        if self.cfg.viewer.show_heading:
+            self.gym.clear_lines(self.viewer)
+            self._draw_dir()
+
         if self.cfg.commands.heading_command:
             forward = quat_apply(self.base_quat, self.forward_vec)
             heading = torch.atan2(forward[:, 1], forward[:, 0])
@@ -339,6 +476,191 @@ class LeggedRobot(BaseTask):
             self.measured_heights = self._get_heights()
         if self.cfg.domain_rand.push_robots and  (self.common_step_counter % self.cfg.domain_rand.push_interval == 0):
             self._push_robots()
+    def _draw_commanded_velocities(self, env_ids):
+        """ 
+        Draws clearly visible arrows for:
+        - Commanded velocity direction (blue)
+        - Robot heading direction (black)
+
+        Args:
+            env_ids (tensor or list): Indices of the environments to visualize.
+        """
+        self.gym.refresh_rigid_body_state_tensor(self.sim)
+
+        # Exit early if no valid environments
+        if len(env_ids) == 0:
+            return
+
+        # Increase scale factor for longer arrows
+        scale_factor = 15  
+
+        # Get base positions and commanded velocities
+        base_positions = self.root_states[env_ids, :3].cpu().numpy()
+        commanded_vels = self.commands[env_ids, :2].cpu().numpy()
+
+        # Compute commanded velocity end positions (scaled)
+        end_positions_cmd = base_positions.copy()
+        end_positions_cmd[:, 0] += commanded_vels[:, 0] * scale_factor
+        end_positions_cmd[:, 1] += commanded_vels[:, 1] * scale_factor
+
+        # **Fix Shape Issue: Expand forward_vec properly**
+        forward_vecs = quat_apply(self.base_quat[env_ids], self.forward_vec.expand(len(env_ids), -1)).cpu().numpy()
+
+        # Compute heading end positions (scaled)
+        end_positions_heading = base_positions.copy()
+        end_positions_heading[:, 0] += forward_vecs[:, 0] * scale_factor
+        end_positions_heading[:, 1] += forward_vecs[:, 1] * scale_factor
+
+        # **Prepare line vertices and colors for visualization**
+        line_vertices = []
+        line_colors = []
+
+        for i in range(len(env_ids)):
+            # Commanded velocity (blue)
+            line_vertices.append(gymapi.Vec3(*base_positions[i]))
+            line_vertices.append(gymapi.Vec3(*end_positions_cmd[i]))
+            line_colors.append(gymapi.Vec3(0, 0, 1))  # Blue
+            line_colors.append(gymapi.Vec3(0, 0, 1))  # Blue
+
+            # Robot heading direction (black)
+            line_vertices.append(gymapi.Vec3(*base_positions[i]))
+            line_vertices.append(gymapi.Vec3(*end_positions_heading[i]))
+            line_colors.append(gymapi.Vec3(0, 0, 0))  # Black
+            line_colors.append(gymapi.Vec3(0, 0, 0))  # Black
+
+        # **Clear previous lines before drawing new ones**
+        self.gym.clear_lines(self.viewer)
+
+        # **Draw the arrows as proper lines**
+        self.gym.add_lines(self.viewer, self.envs[env_ids[0]], len(line_vertices) // 2, line_vertices, line_colors)
+
+
+    def _draw_dir(self):
+        """ 
+        Draws two arrows for each robot:
+        - Commanded velocity direction (red-orange)
+        - Current heading direction (blue)
+        """
+
+        # Define sphere geometries for arrows
+        sphere_geom_cmd_vel = gymutil.WireframeSphereGeometry(0.02, 16, 16, None, color=(1, 0.35, 0.25))  # Red-orange
+        sphere_geom_heading = gymutil.WireframeSphereGeometry(0.02, 16, 16, None, color=(0, 0, 1))  # Blue
+
+        # Get base positions of robots
+        pose_robot = self.root_states[:, :3].cpu().numpy()
+        base_positions = self.root_states[:, :3].cpu().numpy()
+
+        # Get commanded velocities and normalize them
+        target_vec = heading_vector_from_yaw(self.commands[:, 3])
+        norm = torch.norm(target_vec, dim=-1, keepdim=True)
+        target_vec_norm_cmd = target_vec / (norm + 1e-5)
+
+        # Get the current heading direction using `forward`
+        forward_vecs = quat_apply(self.base_quat, self.forward_vec)[:, :2]  # Extract (x, y) components
+        norm_heading = torch.norm(forward_vecs, dim=-1, keepdim=True)
+        target_vec_norm_heading = forward_vecs / (norm_heading + 1e-5)  # Normalize
+
+        # Draw arrows for each environment
+        for k in range(self.num_envs):
+            for i in range(5):
+                step_size = 0.2 * (i + 3)  # Scale for arrow visibility
+
+                # Commanded velocity arrow
+                pose_arrow_cmd = pose_robot[k, :2] + step_size * target_vec_norm_cmd[k, :2].cpu().numpy()
+                pose_cmd = gymapi.Transform(gymapi.Vec3(pose_arrow_cmd[0], pose_arrow_cmd[1], pose_robot[k, 2]), r=None)
+                gymutil.draw_lines(sphere_geom_cmd_vel, self.gym, self.viewer, self.envs[k], pose_cmd)
+
+                # Current heading direction arrow
+                pose_arrow_heading = pose_robot[k, :2] + step_size * target_vec_norm_heading[k, :2].cpu().numpy()
+                pose_heading = gymapi.Transform(gymapi.Vec3(pose_arrow_heading[0], pose_arrow_heading[1], pose_robot[k, 2]), r=None)
+                gymutil.draw_lines(sphere_geom_heading, self.gym, self.viewer, self.envs[k], pose_heading)
+
+
+    # def _resample_commands(self, env_ids):
+    #     """ 
+    #     Randomly selects new commands for some environments.
+
+    #     Args:
+    #         env_ids (List[int]): Environment IDs for which new commands are needed.
+    #     """
+    #     # Compute the current forward direction (robot's heading in world space)
+    #     forward = quat_apply(self.base_quat[env_ids], self.forward_vec)  # Shape: (N, 3)
+
+    #     # Extract the current heading (yaw angle) from forward vector
+    #     current_heading = torch.atan2(forward[:, 1], forward[:, 0])  # Compute yaw from (x, y)
+
+    #     # Generate a random heading offset in range [-π/3, π/3]
+    #     heading_offset = torch_rand_float(-np.pi / 3, np.pi / 3, (len(env_ids),1), device=self.device).squeeze(1)
+    #     #import ipdb;ipdb.set_trace()
+
+    #     # Apply the offset and wrap the heading using wrap_to_pi()
+    #     self.commands[env_ids, 3] = wrap_to_pi(current_heading + heading_offset)  # Column 3 stores heading
+
+    #     # Generate linear velocity magnitude
+    #     lin_vel_mag = torch_rand_float(
+    #         self.command_ranges["lin_vel_x"][0], 
+    #         self.command_ranges["lin_vel_x"][1], 
+    #         (len(env_ids),1), device=self.device
+    #     ).squeeze(1)
+
+    #     # Compute velocity components based on the new heading
+    #     self.commands[env_ids, 0] = lin_vel_mag * torch.cos(self.commands[env_ids, 3])  # X component
+    #     self.commands[env_ids, 1] = lin_vel_mag * torch.sin(self.commands[env_ids, 3])  # Y component
+
+    #     # Set small velocity commands to zero for stability
+    #     self.commands[env_ids, :2] *= (torch.norm(self.commands[env_ids, :2], dim=1) > 0.2).unsqueeze(1)
+
+    def compute_yaw(self):
+        forward = quat_apply(self.base_quat, self.forward_vec)
+        heading = torch.atan2(forward[:, 1], forward[:, 0])
+        return heading
+
+    def _resample_commands_parkour(self, env_ids):
+        """ Randommly select commands of some environments
+
+        Args:
+            env_ids (List[int]): Environments ids for which new commands are needed
+        """
+        self.commands[env_ids, 0] = torch_rand_float(self.command_ranges["lin_vel_x"][0], self.command_ranges["lin_vel_x"][1], (len(env_ids), 1), device=self.device).squeeze(1)
+        if self.cfg.commands.heading_command:
+            self.commands[env_ids, 3] = torch_rand_float(self.command_ranges["heading"][0], self.command_ranges["heading"][1], (len(env_ids), 1), device=self.device).squeeze(1)
+        else:
+            self.commands[env_ids, 2] = torch_rand_float(self.command_ranges["ang_vel_yaw"][0], self.command_ranges["ang_vel_yaw"][1], (len(env_ids), 1), device=self.device).squeeze(1)
+            self.commands[env_ids, 2] *= torch.abs(self.commands[env_ids, 2]) > self.cfg.commands.ang_vel_clip
+
+        # set small commands to zero
+        self.commands[env_ids, :2] *= torch.abs(self.commands[env_ids, 0:1]) > self.cfg.commands.lin_vel_clip
+    def _resample_commands(self, env_ids):
+        """ Randomly select commands of some environments
+
+        Args:
+            env_ids (List[int]): Environment ids for which new commands are needed
+        """
+        # Generate new heading within [-pi/3, pi/3] of the current heading
+        
+        current_heading = self.compute_yaw()
+        #delta_heading = torch_rand_float(-np.pi / 3, np.pi / 3, (len(env_ids), 1), device=self.device).squeeze(1)
+        # Compute safe delta_heading limits
+        max_delta = torch.minimum(torch.full_like(current_heading[env_ids], np.pi) - current_heading[env_ids], torch.tensor(np.pi / 3, device=self.device))
+        min_delta = torch.maximum(torch.full_like(current_heading[env_ids], -np.pi) - current_heading[env_ids], torch.tensor(-np.pi / 3, device=self.device))
+
+        delta_heading = min_delta + (max_delta - min_delta) * torch.rand((len(env_ids),1), device=self.device).squeeze(1)
+        self.commands[env_ids, 3] = wrap_to_pi(current_heading[env_ids]+delta_heading)  # Update heading
+
+
+
+        # Generate linear velocity magnitude
+        lin_vel_mag = torch_rand_float(self.command_ranges["lin_vel_x"][0], self.command_ranges["lin_vel_x"][1], 
+                                    (len(env_ids), 1), device=self.device).squeeze(1)
+
+        # Compute x and y components of velocity
+        # self.commands[env_ids, 0] = lin_vel_mag * torch.cos(self.commands[env_ids, 3])  # x component
+        # self.commands[env_ids, 1] = lin_vel_mag * torch.sin(self.commands[env_ids, 3])  # y component
+        self.commands[env_ids, 0] = torch_rand_float(self.command_ranges["lin_vel_x"][0], self.command_ranges["lin_vel_x"][1], (len(env_ids), 1), device=self.device).squeeze(1)
+
+
+        # Set small commands to zero
+        self.commands[env_ids, :2] *= (torch.norm(self.commands[env_ids, :2], dim=1) > 0.2).unsqueeze(1)
 
     # def _resample_commands(self, env_ids):
     #     """ Randommly select commands of some environments
@@ -346,36 +668,40 @@ class LeggedRobot(BaseTask):
     #     Args:
     #         env_ids (List[int]): Environments ids for which new commands are needed
     #     """
-    #     self.commands[env_ids, 0] = torch_rand_float(self.command_ranges["lin_vel_x"][0], self.command_ranges["lin_vel_x"][1], (len(env_ids), 1), device=self.device).squeeze(1)
-    #     #self.commands[env_ids, 1] = torch_rand_float(self.command_ranges["lin_vel_y"][0], self.command_ranges["lin_vel_y"][1], (len(env_ids), 1), device=self.device).squeeze(1)
-    #     self.commands[env_ids, 1] = torch_rand_float(0, 0, (len(env_ids), 1), device=self.device).squeeze(1)
-    #     if self.cfg.commands.heading_command:
-    #         self.commands[env_ids, 3] = torch_rand_float(self.command_ranges["heading"][0], self.command_ranges["heading"][1], (len(env_ids), 1), device=self.device).squeeze(1)
-    #     else:
-    #         self.commands[env_ids, 2] = torch_rand_float(self.command_ranges["ang_vel_yaw"][0], self.command_ranges["ang_vel_yaw"][1], (len(env_ids), 1), device=self.device).squeeze(1)
+    #     self.commands[env_ids, 3] = torch_rand_float(self.command_ranges["heading"][0], self.command_ranges["heading"][1], (len(env_ids), 1), device=self.device).squeeze(1)
+    #     lin_vel_mag = torch_rand_float(self.command_ranges["lin_vel_x"][0], self.command_ranges["lin_vel_x"][1], (len(env_ids), 1), device=self.device).squeeze(1)
+    #     self.commands[env_ids, 0] = lin_vel_mag * torch.cos(self.commands[env_ids,3])  # x component
+    #     self.commands[env_ids, 1] = lin_vel_mag * torch.sin(self.commands[env_ids,3])  # y component
+    #     # self.commands[env_ids, 0] = torch_rand_float(self.command_ranges["lin_vel_x"][0], self.command_ranges["lin_vel_x"][1], (len(env_ids), 1), device=self.device).squeeze(1)
+    #     # #self.commands[env_ids, 1] = torch_rand_float(self.command_ranges["lin_vel_y"][0], self.command_ranges["lin_vel_y"][1], (len(env_ids), 1), device=self.device).squeeze(1)
+    #     # self.commands[env_ids, 1] = torch_rand_float(0, 0, (len(env_ids), 1), device=self.device).squeeze(1)
+    #     # if self.cfg.commands.heading_command:
+    #     #     self.commands[env_ids, 3] = torch_rand_float(self.command_ranges["heading"][0], self.command_ranges["heading"][1], (len(env_ids), 1), device=self.device).squeeze(1)
+    #     # else:
+    #     #     self.commands[env_ids, 2] = torch_rand_float(self.command_ranges["ang_vel_yaw"][0], self.command_ranges["ang_vel_yaw"][1], (len(env_ids), 1), device=self.device).squeeze(1)
 
     #     # set small commands to zero
     #     self.commands[env_ids, :2] *= (torch.norm(self.commands[env_ids, :2], dim=1) > 0.2).unsqueeze(1)
-    def _resample_commands(self, env_ids):
-    # Preserve linear velocities along the current heading
-        forward = quat_apply(self.base_quat, self.forward_vec)
-        heading = torch.atan2(forward[:, 1], forward[:, 0])
+    # def _resample_commands(self, env_ids):
+    # # Preserve linear velocities along the current heading
+    #     forward = quat_apply(self.base_quat, self.forward_vec)
+    #     heading = torch.atan2(forward[:, 1], forward[:, 0])
 
-    # Resample linear velocities (x and y) based on the current heading direction
-        lin_vel_mag = torch_rand_float(self.command_ranges["lin_vel_x"][0], self.command_ranges["lin_vel_x"][1], (len(env_ids), 1), device=self.device).squeeze(1)
+    # # Resample linear velocities (x and y) based on the current heading direction
+    #     lin_vel_mag = torch_rand_float(self.command_ranges["lin_vel_x"][0], self.command_ranges["lin_vel_x"][1], (len(env_ids), 1), device=self.device).squeeze(1)
     
-    # Apply the heading direction to velocity components
-        self.commands[env_ids, 0] = lin_vel_mag * torch.cos(heading[env_ids])  # x component
-        self.commands[env_ids, 1] = lin_vel_mag * torch.sin(heading[env_ids])  # y component
+    # # Apply the heading direction to velocity components
+    #     self.commands[env_ids, 0] = lin_vel_mag * torch.cos(heading[env_ids])  # x component
+    #     self.commands[env_ids, 1] = lin_vel_mag * torch.sin(heading[env_ids])  # y component
     
-    # Resample or adjust heading if required, ensuring the bot keeps going in the same direction
-        if self.cfg.commands.heading_command:
-            self.commands[env_ids, 3] = heading[env_ids]  # Keep heading as current heading
-        else:
-            self.commands[env_ids, 2] = torch.clip(0.5 * wrap_to_pi(self.commands[env_ids, 3] - heading[env_ids]), -1., 1.)
+    # # Resample or adjust heading if required, ensuring the bot keeps going in the same direction
+    #     if self.cfg.commands.heading_command:
+    #         self.commands[env_ids, 3] = heading[env_ids]  # Keep heading as current heading
+    #     else:
+    #         self.commands[env_ids, 2] = torch.clip(0.5 * wrap_to_pi(self.commands[env_ids, 3] - heading[env_ids]), -1., 1.)
 
-    # Set small velocity commands to zero
-        self.commands[env_ids, :2] *= (torch.norm(self.commands[env_ids, :2], dim=1) > 0.2).unsqueeze(1)
+    # # Set small velocity commands to zero
+    #     self.commands[env_ids, :2] *= (torch.norm(self.commands[env_ids, :2], dim=1) > 0.2).unsqueeze(1)
 
 
     def _compute_torques(self, actions):
@@ -438,6 +764,7 @@ class LeggedRobot(BaseTask):
         self.gym.set_actor_root_state_tensor_indexed(self.sim,
                                                      gymtorch.unwrap_tensor(self.root_states),
                                                      gymtorch.unwrap_tensor(env_ids_int32), len(env_ids_int32))
+        # import ipdb;ipdb.set_trace()
 
     def _push_robots(self):
         """ Random pushes the robots. Emulates an impulse by setting a randomized base velocity. 
@@ -460,7 +787,13 @@ class LeggedRobot(BaseTask):
         # robots that walked far enough progress to harder terains
         move_up = distance > self.terrain.env_length / 2
         # robots that walked less than half of their required distance go to simpler terrains
-        move_down = (distance < torch.norm(self.commands[env_ids, :2], dim=1)*self.max_episode_length_s*0.5) * ~move_up
+        # move_down = (distance < torch.norm(self.commands[env_ids, :2], dim=1)*self.max_episode_length_s*0.5) * ~move_up
+        move_down = (distance < torch.norm(self.commands[env_ids, :1], dim=1)*self.max_episode_length_s*0.5) * ~move_up
+
+        # threshold = self.commands[env_ids, 0] * self.cfg.env.episode_length_s
+        # move_up =dis_to_origin > 0.8*threshold
+        # move_down = dis_to_origin < 0.4*threshold
+
         self.terrain_levels[env_ids] += 1 * move_up - 1 * move_down
         # Robots that solve the last level are sent to a random one
         self.terrain_levels[env_ids] = torch.where(self.terrain_levels[env_ids]>=self.max_terrain_level,
@@ -475,7 +808,7 @@ class LeggedRobot(BaseTask):
             env_ids (List[int]): ids of environments being reset
         """
         # If the tracking reward is above 80% of the maximum, increase the range of commands
-        if torch.mean(self.episode_sums["tracking_lin_vel"][env_ids]) / self.max_episode_length > 0.8 * self.reward_scales["tracking_lin_vel"]:
+        if torch.mean(self.episode_sums[self.cfg.rewards.vel_tracking_reward][env_ids]) / self.max_episode_length > 0.8 * self.reward_scales[self.cfg.rewards.vel_tracking_reward]:
             self.command_ranges["lin_vel_x"][0] = np.clip(self.command_ranges["lin_vel_x"][0] - 0.5, -self.cfg.commands.max_curriculum, 0.)
             self.command_ranges["lin_vel_x"][1] = np.clip(self.command_ranges["lin_vel_x"][1] + 0.5, 0., self.cfg.commands.max_curriculum)
 
@@ -490,8 +823,23 @@ class LeggedRobot(BaseTask):
         Returns:
             [torch.Tensor]: Vector of scales used to multiply a uniform distribution in [-1, 1]
         """
-        obs_dim = 253  # This should match the size of each observation in obs_buf
+        # obs_dim = 253  # This should match the size of each observation in obs_buf
+        obs_dim = 256
         noise_vec = torch.zeros(obs_dim)  # Initialize with the correct size
+        # self.obs_buf = torch.cat((  self.base_lin_vel * self.obs_scales.lin_vel,
+        #                             self.base_ang_vel  * self.obs_scales.ang_vel,
+        #                             imu_obs,
+        #                             delta_yaw,
+        #                             self.projected_gravity,
+        #                             self.commands[:, 0:1] * self.commands_scale,
+        #                             # self.commands[:, :3] * self.commands_scale,
+        #                             (self.dof_pos - self.default_dof_pos) * self.obs_scales.dof_pos,
+        #                             self.dof_vel * self.obs_scales.dof_vel,
+        #                             flat_tensor,                        # [batch_size, 1]
+        #                             not_flat_tensor,
+        #                             self.actions,
+        #                             self.contact_filt.float()-0.5
+        #                             ),dim=-1)
 
         self.add_noise = self.cfg.noise.add_noise
         noise_scales = self.cfg.noise.noise_scales
@@ -499,17 +847,21 @@ class LeggedRobot(BaseTask):
 
         noise_vec[:3] = noise_scales.lin_vel * noise_level * self.obs_scales.lin_vel
         noise_vec[3:6] = noise_scales.ang_vel * noise_level * self.obs_scales.ang_vel
+        noise_vec[3:5] = noise_scales.orientation * noise_level
+        noise_vec[5:6] = noise_scales.orientation * noise_level
         noise_vec[6:9] = noise_scales.gravity * noise_level
-        noise_vec[9:12] = 0.  # commands
-        noise_vec[12:24] = noise_scales.dof_pos * noise_level * self.obs_scales.dof_pos
-        noise_vec[24:36] = noise_scales.dof_vel * noise_level * self.obs_scales.dof_vel
-        noise_vec[36:48] = 0.  # previous actions
+        noise_vec[9:10] = 0.  # commands
+        noise_vec[10:22] = noise_scales.dof_pos * noise_level * self.obs_scales.dof_pos
+        noise_vec[22:34] = noise_scales.dof_vel * noise_level * self.obs_scales.dof_vel
+        noise_vec[34:46] = 0.  # previous actions
 
         if self.cfg.terrain.measure_heights:
-            noise_vec[48:253] = noise_scales.height_measurements * noise_level * self.obs_scales.height_measurements
+            # noise_vec[48:253] = noise_scales.height_measurements * noise_level * self.obs_scales.height_measurements
+            noise_vec[46:256] = noise_scales.height_measurements * noise_level * self.obs_scales.height_measurements
         else:
             # If terrain height measurements are not used, fill the rest with zeros
-            noise_vec[48:253] = 0.
+            #noise_vec[48:253] = 0.
+            noise_vec[46:256] = 0.
 
             # Ensure that noise_vec has exactly 253 elements
         assert noise_vec.shape[0] == obs_dim, f"noise_vec has incorrect size: {noise_vec.shape[0]} != {obs_dim}"
@@ -551,12 +903,14 @@ class LeggedRobot(BaseTask):
         self.last_dof_vel = torch.zeros_like(self.dof_vel)
         self.last_root_vel = torch.zeros_like(self.root_states[:, 7:13])
         self.commands = torch.zeros(self.num_envs, self.cfg.commands.num_commands, dtype=torch.float, device=self.device, requires_grad=False) # x vel, y vel, yaw vel, heading
-        self.commands_scale = torch.tensor([self.obs_scales.lin_vel, self.obs_scales.lin_vel, self.obs_scales.ang_vel], device=self.device, requires_grad=False,) # TODO change this
+        self.commands_scale = torch.tensor([self.obs_scales.lin_vel], device=self.device, requires_grad=False,) # TODO change this
+        # self.commands_scale = torch.tensor([self.obs_scales.lin_vel, self.obs_scales.lin_vel, self.obs_scales.ang_vel], device=self.device, requires_grad=False,) # TODO change this
         self.feet_air_time = torch.zeros(self.num_envs, self.feet_indices.shape[0], dtype=torch.float, device=self.device, requires_grad=False)
         self.last_contacts = torch.zeros(self.num_envs, len(self.feet_indices), dtype=torch.bool, device=self.device, requires_grad=False)
         self.base_lin_vel = quat_rotate_inverse(self.base_quat, self.root_states[:, 7:10])
         self.base_ang_vel = quat_rotate_inverse(self.base_quat, self.root_states[:, 10:13])
         self.projected_gravity = quat_rotate_inverse(self.base_quat, self.gravity_vec)
+        self.action_delay_buffer=torch.zeros(self.num_envs,18,1,device=self.device)
         # Add this to the constructor of the LeggedRobot class
         self.leg_contact_time = torch.zeros(self.num_envs, len(self.feet_indices), device=self.device)
 
@@ -918,6 +1272,11 @@ class LeggedRobot(BaseTask):
     def _reward_ang_vel_xy(self):
         # Penalize xy axes base angular velocity
         return torch.sum(torch.square(self.base_ang_vel[:, :2]), dim=1)
+    def _reward_delta_yaw(self):
+        # Penalize high delta_yaw values
+        rew = torch.exp(-torch.abs(self.commands[:, 3] - self.compute_yaw()))
+        return rew
+
     
     def _reward_orientation(self):
         # Penalize non flat base orientation
@@ -973,6 +1332,19 @@ class LeggedRobot(BaseTask):
         lin_vel_error = torch.sum(torch.square(self.commands[:, :2] - self.base_lin_vel[:, :2]), dim=1)
         return torch.exp(-lin_vel_error/self.cfg.rewards.tracking_sigma)
     
+    def _reward_tracking_goal_vel(self):
+        target_vec = heading_vector_from_yaw(self.commands[:, 3])
+        norm = torch.norm(target_vec, dim=-1, keepdim=True)
+        target_vec_norm = target_vec / (norm + 1e-5)
+        cur_vel = self.base_lin_vel[:, :2]
+        # rew = torch.minimum(torch.sum(target_vec_norm * cur_vel, dim=-1), self.commands[:, 0]) / (self.commands[:, 0] + 1e-5)
+        # import ipdb;ipdb.set_trace()
+        vel_rel_heading = torch.sum(target_vec_norm * cur_vel, dim=-1)
+        # import ipdb;ipdb.set_trace()
+        lin_vel_error = torch.square(vel_rel_heading - self.commands[:, 0])
+        return torch.exp(-lin_vel_error/self.cfg.rewards.tracking_sigma)
+        # return rew
+    
     def _reward_tracking_ang_vel(self):
         # Tracking of angular velocity commands (yaw) 
         ang_vel_error = torch.square(self.commands[:, 2] - self.base_ang_vel[:, 2])
@@ -981,7 +1353,7 @@ class LeggedRobot(BaseTask):
     def _reward_feet_air_time(self):
         # Reward long steps
         # Need to filter the contacts because the contact reporting of PhysX is unreliable on meshes
-        contact = self.contact_forces[:, self.feet_indices, 2] > 1.
+        contact = self.contact_forces[:, self.feet_indices, 2] > 1.0
         contact_filt = torch.logical_or(contact, self.last_contacts) 
         self.last_contacts = contact
         first_contact = (self.feet_air_time > 0.) * contact_filt
