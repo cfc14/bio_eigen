@@ -138,10 +138,12 @@ class TaskRegistry():
         if log_root=="default":
             log_root = os.path.join(LEGGED_GYM_ROOT_DIR, 'logs', train_cfg.runner.experiment_name)
             log_dir = os.path.join(log_root, datetime.now().strftime('%b%d_%H-%M-%S') + '_' + train_cfg.runner.run_name)
+
+            #log_dir = os.path.join(log_root, train_cfg.runner.expt_id  + '_' + train_cfg.runner.run_name)
         elif log_root is None:
             log_dir = None
         else:
-            log_dir = os.path.join(log_root, datetime.now().strftime('%b%d_%H-%M-%S') + '_' + train_cfg.runner.run_name)
+            log_dir = os.path.join(log_root, train_cfg.runner.expt_id + '_' + train_cfg.runner.run_name)
         
         train_cfg_dict = class_to_dict(train_cfg)
         runner = OnPolicyRunner(env, train_cfg_dict, log_dir, device=args.rl_device)
@@ -155,6 +157,7 @@ class TaskRegistry():
             resume_path = get_load_path(log_root, load_run=train_cfg.runner.load_run, checkpoint=train_cfg.runner.checkpoint)
             #resume_path = get_load_path(log_root, load_run='/home/loganzhang/Eigenbotrl/legged_gym/logs/test/Mar03_06-14-55_Trained_on_flat_terrain_fresh-no_airtime-parkour_obs_no_yawvel-heading_reward_1_2-high_panelty_xyang_proj_gravity-airtime_0_8',checkpoint=train_cfg.runner.checkpoint)
             print(f"Loading model from: {resume_path}")
+            #import ipdb; ipdb.set_trace()
             runner.load(resume_path)
         return runner, train_cfg
 

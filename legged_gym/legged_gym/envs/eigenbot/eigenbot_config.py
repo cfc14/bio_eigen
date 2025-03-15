@@ -39,7 +39,7 @@ class EigenbotRoughCfg( LeggedRobotCfg ):
     class asset( LeggedRobotCfg.asset ):
         file = '{LEGGED_GYM_ROOT_DIR}/resources/robots/eigenbot/urdf/hexapod_v2.urdf'
         name = "eigenbot"
-        foot_name = "foot"
+        foot_name = "foot_input"
         #penalize_contacts_on = ["bendy_input_M18_S18","bendy_input_M17_S17","bendy_input_M16_S16","bendy_input_M15_S15","bendy_input_M14_S14","bendy_input_M13_S13","bendy_input_M12_S12","bendy_input_M11_S11","bendy_input_M10_S10","bendy_input_M9_S9","bendy_input_M8_S8","bendy_input_M7_S7","bendy_input_M6_S6","bendy_input_M5_S5","bendy_input_M4_S4","bendy_input_M3_S3","bendy_input_M2_S2","bendy_input_M1_S1","static_elbow_M24_S24","static_elbow_M23_S23","static_elbow_M22_S22","static_elbow_M21_S21","static_elbow_M20_S20","static_elbow_M19_S19","foot_input_M25_S25","foot_input_M26_S26","foot_input_M27_S27","foot_input_M28_S28","foot_input_M29_S29","foot_input_M30_S30"]
         penalize_contacts_on = ["bendy_input_M18_S18","bendy_input_M17_S17","bendy_input_M16_S16","bendy_input_M15_S15","bendy_input_M14_S14","bendy_input_M13_S13","bendy_input_M12_S12","bendy_input_M11_S11","bendy_input_M10_S10","bendy_input_M9_S9","bendy_input_M8_S8","bendy_input_M7_S7","bendy_input_M6_S6","bendy_input_M5_S5","bendy_input_M4_S4","bendy_input_M3_S3","bendy_input_M2_S2","bendy_input_M1_S1"]
         terminate_after_contacts_on = ["base_link"]
@@ -51,7 +51,7 @@ class EigenbotRoughCfg( LeggedRobotCfg ):
     class rewards( LeggedRobotCfg.rewards ):
         soft_dof_pos_limit = 0.9
         # base_height_target = 0.25
-        base_height_target = 0.15
+        base_height_target = 0.225
         soft_torque_limit=1.
         soft_dof_vel_limit= 2.5 #1.5
         class scales( LeggedRobotCfg.rewards.scales ):

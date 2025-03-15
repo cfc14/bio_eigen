@@ -95,17 +95,24 @@ class Logger:
         if log["command_y"]: a.plot(time, log["command_y"], label='commanded')
         a.set(xlabel='time [s]', ylabel='base lin vel [m/s]', title='Base velocity y')
         a.legend()
-        # plot base vel yaw
-        a = axs[0, 2]
-        if log["base_vel_yaw"]: a.plot(time, log["base_vel_yaw"], label='measured')
-        if log["command_yaw"]: a.plot(time, log["command_yaw"], label='commanded')
-        a.set(xlabel='time [s]', ylabel='base ang vel [rad/s]', title='Base velocity yaw')
-        a.legend()
+        # # plot base vel yaw
+        # a = axs[0, 2]
+        # if log["base_vel_yaw"]: a.plot(time, log["base_vel_yaw"], label='measured')
+        # if log["command_yaw"]: a.plot(time, log["command_yaw"], label='commanded')
+        # a.set(xlabel='time [s]', ylabel='base ang vel [rad/s]', title='Base velocity yaw')
+        # a.legend()
+
         # plot base vel z
+        a = axs[0, 2]
+        if log["base_height"]: a.plot(time, log["base_height"], label='measured')
+        a.set(xlabel='time [s]', ylabel='base height', title='Base height')
+        a.legend()
         a = axs[1, 2]
         if log["base_vel_z"]: a.plot(time, log["base_vel_z"], label='measured')
         a.set(xlabel='time [s]', ylabel='base lin vel [m/s]', title='Base velocity z')
         a.legend()
+        # plot base_height
+
         # plot contact forces
         a = axs[2, 0]
         if log["contact_forces_z"]:

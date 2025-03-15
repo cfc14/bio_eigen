@@ -97,6 +97,9 @@ class LeggedRobot(BaseTask):
         self.height_samples = None
         self.debug_viz = False
         self.init_done = False
+        self.contact_flag = torch.zeros(6)
+        self.flat_tensor = None
+
         
 
         self._parse_cfg(self.cfg)
@@ -137,7 +140,7 @@ class LeggedRobot(BaseTask):
         # Given mode (mx) value for Rayleigh distribution
         mx = 0.01
         sigma = mx / np.sqrt(2 * np.log(2))
-        self.nn_actions = actions
+        # self.nn_actions = self.reindex(actions)
         
 
         # # **Fill the buffer for the first 5 timesteps**
@@ -224,6 +227,7 @@ class LeggedRobot(BaseTask):
         contact = torch.norm(self.contact_forces[:, self.feet_indices], dim=-1) > 2.
         self.contact_filt = torch.logical_or(contact, self.last_contacts) 
         self.last_contacts = contact
+        
 
         self._post_physics_step_callback()
 
@@ -240,6 +244,12 @@ class LeggedRobot(BaseTask):
 
         if self.viewer and self.enable_viewer_sync and self.debug_viz:
             self._draw_debug_vis()
+
+    def reindex_feet(self, vec):
+        return vec[:, [0,3,1,4,2,5]]
+
+    def reindex(self, vec):
+        return vec[:, [0,1,2,9,10,11,3,4,5,12,13,14,6,7,8,15,16,17]]
 
     def check_termination(self):
         """ Check if environments need to be reset
@@ -317,13 +327,13 @@ class LeggedRobot(BaseTask):
         """
         imu_obs = torch.stack((self.roll, self.pitch), dim=1)
 
-        current_heading = self.compute_yaw()
+        current_heading = wrap_to_pi(self.compute_yaw())
         commanded_heading = self.commands[ :, 3]
-        delta_yaw = (commanded_heading - current_heading)[:,None]
-        self.flat=1
+        delta_yaw = wrap_to_pi((commanded_heading - current_heading)[:,None])
+        # self.flat=1
 
-        flat_tensor = (torch.ones(self.num_envs, device=self.device, requires_grad=False) * self.flat)[:,None]
-        not_flat_tensor = (torch.ones(self.num_envs, device=self.device, requires_grad=False)  * self.flat)[:,None]
+        # flat_tensor = (torch.ones(self.num_envs, device=self.device, requires_grad=False) * self.flat)[:,None]
+        # not_flat_tensor = (torch.ones(self.num_envs, device=self.device, requires_grad=False)  * self.flat)[:,None]
         #import ipdb; ipdb.set_trace()
 
 
@@ -335,6 +345,9 @@ class LeggedRobot(BaseTask):
         #                             self.dof_vel * self.obs_scales.dof_vel,
         #                             self.actions,
         #                             ),dim=-1)
+        # import ipdb;ipdb.set_trace()
+        not_flat_tensor = (torch.abs(torch.mean(self.measured_heights, dim=1))>0.05)[:,None]
+        self.flat_tensor=~not_flat_tensor
         self.obs_buf = torch.cat((  self.base_lin_vel * self.obs_scales.lin_vel,
                                     self.base_ang_vel  * self.obs_scales.ang_vel,
                                     imu_obs,
@@ -344,7 +357,7 @@ class LeggedRobot(BaseTask):
                                     # self.commands[:, :3] * self.commands_scale,
                                     (self.dof_pos - self.default_dof_pos) * self.obs_scales.dof_pos,
                                     self.dof_vel * self.obs_scales.dof_vel,
-                                    flat_tensor,                        # [batch_size, 1]
+                                    self.flat_tensor,                        # [batch_size, 1]
                                     not_flat_tensor,
                                     self.actions,
                                     self.contact_filt.float()-0.5
@@ -433,7 +446,7 @@ class LeggedRobot(BaseTask):
                 self.dof_pos_limits[i, 0] = props["lower"][i].item()
                 self.dof_pos_limits[i, 1] = props["upper"][i].item()
                 self.dof_vel_limits[i] = props["velocity"][i].item()
-                self.torque_limits[i] = props["effort"][i].item()
+                self.torque_limits[i] = self.cfg.rewards.torque_limit_hard#props["effort"][i].item()
                 # soft limits
                 m = (self.dof_pos_limits[i, 0] + self.dof_pos_limits[i, 1]) / 2
                 r = self.dof_pos_limits[i, 1] - self.dof_pos_limits[i, 0]
@@ -638,14 +651,17 @@ class LeggedRobot(BaseTask):
         """
         # Generate new heading within [-pi/3, pi/3] of the current heading
         
-        current_heading = self.compute_yaw()
+        current_heading = wrap_to_pi(self.compute_yaw())
         #delta_heading = torch_rand_float(-np.pi / 3, np.pi / 3, (len(env_ids), 1), device=self.device).squeeze(1)
         # Compute safe delta_heading limits
-        max_delta = torch.minimum(torch.full_like(current_heading[env_ids], np.pi) - current_heading[env_ids], torch.tensor(np.pi / 3, device=self.device))
-        min_delta = torch.maximum(torch.full_like(current_heading[env_ids], -np.pi) - current_heading[env_ids], torch.tensor(-np.pi / 3, device=self.device))
+        max_delta = torch.minimum(torch.full_like(current_heading[env_ids], np.pi) - current_heading[env_ids], torch.tensor(self.cfg.commands.ranges.heading[1], device=self.device))
+        min_delta = torch.maximum(torch.full_like(current_heading[env_ids], -np.pi) - current_heading[env_ids], torch.tensor(self.cfg.commands.ranges.heading[0], device=self.device))
 
         delta_heading = min_delta + (max_delta - min_delta) * torch.rand((len(env_ids),1), device=self.device).squeeze(1)
-        self.commands[env_ids, 3] = wrap_to_pi(current_heading[env_ids]+delta_heading)  # Update heading
+        if (self.cfg.commands.rand_heading):
+            self.commands[env_ids, 3] = wrap_to_pi(current_heading[env_ids]+delta_heading)  # Update heading
+        else:
+            self.commands[env_ids, 3] = current_heading[env_ids]
 
 
 
@@ -660,7 +676,7 @@ class LeggedRobot(BaseTask):
 
 
         # Set small commands to zero
-        self.commands[env_ids, :2] *= (torch.norm(self.commands[env_ids, :2], dim=1) > 0.2).unsqueeze(1)
+        self.commands[env_ids, :2] *= (torch.norm(self.commands[env_ids, :1], dim=1) > self.cfg.commands.lin_vel_clip).unsqueeze(1)
 
     # def _resample_commands(self, env_ids):
     #     """ Randommly select commands of some environments
@@ -824,7 +840,7 @@ class LeggedRobot(BaseTask):
             [torch.Tensor]: Vector of scales used to multiply a uniform distribution in [-1, 1]
         """
         # obs_dim = 253  # This should match the size of each observation in obs_buf
-        obs_dim = 256
+        obs_dim = 262
         noise_vec = torch.zeros(obs_dim)  # Initialize with the correct size
         # self.obs_buf = torch.cat((  self.base_lin_vel * self.obs_scales.lin_vel,
         #                             self.base_ang_vel  * self.obs_scales.ang_vel,
@@ -854,14 +870,15 @@ class LeggedRobot(BaseTask):
         noise_vec[10:22] = noise_scales.dof_pos * noise_level * self.obs_scales.dof_pos
         noise_vec[22:34] = noise_scales.dof_vel * noise_level * self.obs_scales.dof_vel
         noise_vec[34:46] = 0.  # previous actions
+        noise_vec[46:52] = 0.  # contact filter
 
         if self.cfg.terrain.measure_heights:
             # noise_vec[48:253] = noise_scales.height_measurements * noise_level * self.obs_scales.height_measurements
-            noise_vec[46:256] = noise_scales.height_measurements * noise_level * self.obs_scales.height_measurements
+            noise_vec[52:262] = noise_scales.height_measurements * noise_level * self.obs_scales.height_measurements
         else:
             # If terrain height measurements are not used, fill the rest with zeros
             #noise_vec[48:253] = 0.
-            noise_vec[46:256] = 0.
+            noise_vec[52:262] = 0.
 
             # Ensure that noise_vec has exactly 253 elements
         assert noise_vec.shape[0] == obs_dim, f"noise_vec has incorrect size: {noise_vec.shape[0]} != {obs_dim}"
@@ -906,6 +923,13 @@ class LeggedRobot(BaseTask):
         self.commands_scale = torch.tensor([self.obs_scales.lin_vel], device=self.device, requires_grad=False,) # TODO change this
         # self.commands_scale = torch.tensor([self.obs_scales.lin_vel, self.obs_scales.lin_vel, self.obs_scales.ang_vel], device=self.device, requires_grad=False,) # TODO change this
         self.feet_air_time = torch.zeros(self.num_envs, self.feet_indices.shape[0], dtype=torch.float, device=self.device, requires_grad=False)
+        
+        self.middle_liftoff_time_lpsi = torch.zeros(self.num_envs, self.feet_indices.shape[0]//3, dtype=torch.float, device=self.device, requires_grad=False)
+        self.middle_liftoff_time_contra = torch.zeros(self.num_envs, self.feet_indices.shape[0]//3, dtype=torch.float, device=self.device, requires_grad=False)
+        self.hind_liftoff_time_lpsi = torch.zeros(self.num_envs, self.feet_indices.shape[0]//3, dtype=torch.float, device=self.device, requires_grad=False)
+        self.hind_liftoff_time_contra = torch.zeros(self.num_envs, self.feet_indices.shape[0]//3, dtype=torch.float, device=self.device, requires_grad=False)
+        self.front_liftoff_time_contra = torch.zeros(self.num_envs, self.feet_indices.shape[0]//3, dtype=torch.float, device=self.device, requires_grad=False)
+
         self.last_contacts = torch.zeros(self.num_envs, len(self.feet_indices), dtype=torch.bool, device=self.device, requires_grad=False)
         self.base_lin_vel = quat_rotate_inverse(self.base_quat, self.root_states[:, 7:10])
         self.base_ang_vel = quat_rotate_inverse(self.base_quat, self.root_states[:, 10:13])
@@ -924,6 +948,7 @@ class LeggedRobot(BaseTask):
             name = self.dof_names[i]
             angle = self.cfg.init_state.default_joint_angles[name]
             self.default_dof_pos[i] = angle
+            # import ipdb;ipdb.set_trace()
             found = False
             for dof_name in self.cfg.control.stiffness.keys():
                 if dof_name in name:
@@ -1048,6 +1073,7 @@ class LeggedRobot(BaseTask):
         self.num_bodies = len(body_names)
         self.num_dofs = len(self.dof_names)
         feet_names = [s for s in body_names if self.cfg.asset.foot_name in s]
+        # import ipdb;ipdb.set_trace()
         penalized_contact_names = []
         for name in self.cfg.asset.penalize_contacts_on:
             penalized_contact_names.extend([s for s in body_names if name in s])
@@ -1086,6 +1112,8 @@ class LeggedRobot(BaseTask):
         self.feet_indices = torch.zeros(len(feet_names), dtype=torch.long, device=self.device, requires_grad=False)
         for i in range(len(feet_names)):
             self.feet_indices[i] = self.gym.find_actor_rigid_body_handle(self.envs[0], self.actor_handles[0], feet_names[i])
+
+        #import ipdb;ipdb.set_trace()
 
         self.penalised_contact_indices = torch.zeros(len(penalized_contact_names), dtype=torch.long, device=self.device, requires_grad=False)
         for i in range(len(penalized_contact_names)):
@@ -1274,13 +1302,16 @@ class LeggedRobot(BaseTask):
         return torch.sum(torch.square(self.base_ang_vel[:, :2]), dim=1)
     def _reward_delta_yaw(self):
         # Penalize high delta_yaw values
-        rew = torch.exp(-torch.abs(self.commands[:, 3] - self.compute_yaw()))
+        rew = torch.exp(-torch.abs(wrap_to_pi(self.commands[:, 3] - self.compute_yaw())))
         return rew
 
     
     def _reward_orientation(self):
         # Penalize non flat base orientation
-        return torch.sum(torch.square(self.projected_gravity[:, :2]), dim=1)
+        # import ipdb;ipdb.set_trace()
+        if self.flat_tensor == None:
+            self.flat_tensor = torch.ones(self.cfg.env.num_envs, dtype=torch.bool, device=self.device)[:,None]
+        return torch.sum(torch.square(self.projected_gravity[:, :2]*self.flat_tensor), dim=1)
 
     def _reward_base_height(self):
         # Penalize base height away from target
@@ -1336,7 +1367,7 @@ class LeggedRobot(BaseTask):
         target_vec = heading_vector_from_yaw(self.commands[:, 3])
         norm = torch.norm(target_vec, dim=-1, keepdim=True)
         target_vec_norm = target_vec / (norm + 1e-5)
-        cur_vel = self.base_lin_vel[:, :2]
+        cur_vel = self.root_states[:, 7:9]#self.base_lin_vel[:, :2]
         # rew = torch.minimum(torch.sum(target_vec_norm * cur_vel, dim=-1), self.commands[:, 0]) / (self.commands[:, 0] + 1e-5)
         # import ipdb;ipdb.set_trace()
         vel_rel_heading = torch.sum(target_vec_norm * cur_vel, dim=-1)
@@ -1353,7 +1384,7 @@ class LeggedRobot(BaseTask):
     def _reward_feet_air_time(self):
         # Reward long steps
         # Need to filter the contacts because the contact reporting of PhysX is unreliable on meshes
-        contact = self.contact_forces[:, self.feet_indices, 2] > 1.0
+        contact = self.contact_forces[:, self.feet_indices, 2] > self.cfg.rewards.contact_tresh#1.0
         contact_filt = torch.logical_or(contact, self.last_contacts) 
         self.last_contacts = contact
         first_contact = (self.feet_air_time > 0.) * contact_filt
@@ -1477,4 +1508,144 @@ class LeggedRobot(BaseTask):
     #     standing_penalty *= (torch.norm(self.commands[:, :2], dim=1) > 0.1).float()
 
     #     return standing_penalty
+    def _reward_rule_1_tripod(self):
+        """
+        Rule 1: Prevents simultaneous ipsilateral liftoff in anterior legs.
+
+        Returns:
+            Tensor: Penalty (negative reward).
+        """
+        contact = self.contact_forces[:, self.feet_indices, 2] > self.cfg.rewards.contact_tresh
+        contact_filt = torch.logical_or(contact, self.last_contacts)
+        self.last_contacts = contacts.clone()
+
+        middle_leg_contact = contact_filt[:, [1, 4]]
+        front_leg_contact = contact_filt[:, [0, 3]]  # Front legs
+        hind_leg_contact = contact_filt[:, [2, 5]] 
+
+        middle_up = ~middle_leg_contact  # Middle leg lifted
+        front_hind_down = front_leg_contact | hind_leg_contact  # At least one of front/hind in stance
+        rule_1_a = torch.any(middle_up & front_hind_down, dim=1)
+
+        front_hind_up = ~front_leg_contact | ~hind_leg_contact  # Either front or hind lifted
+        rule_1_b = torch.any(front_hind_up & middle_leg_contact, dim=1)
+
+        # Total reward
+        rule_1_reward = rule_1_a.float() + rule_1_b.float()
+        return rule_1_reward
+
+    def _reward_rule_1(self):
+        """
+        Rule 1: Prevents simultaneous ipsilateral liftoff in anterior legs.
+
+        Returns:
+            Tensor: Penalty (negative reward).
+        """
+        contact = self.contact_forces[:, self.feet_indices, 2] > self.cfg.rewards.contact_tresh
+        contact_filt = torch.logical_or(contact, self.last_contacts)
+        self.last_contacts = contact.clone()
+
+        middle_leg_contact = contact_filt[:, [1, 4]]
+        front_leg_contact = contact_filt[:, [0, 3]]  # Front legs
+        hind_leg_contact = contact_filt[:, [2, 5]] 
+
+        middle_up = ~middle_leg_contact  # Middle leg lifted
+        # front_down = front_leg_contact | hind_leg_contact  # At least one of front/hind in stance
+        rule_1_a = torch.any(middle_up & front_leg_contact, dim=1)
+
+        hind_up = ~hind_leg_contact  # Either front or hind lifted
+        rule_1_b = torch.any(hind_up & middle_leg_contact, dim=1)
+        # rule_1_c = torch.any(hind_up & middle_leg_contact, dim=1)
+
+
+        # Total reward
+        rule_1_reward = rule_1_a.float() + rule_1_b.float()
+        return rule_1_reward
+
+
+    def _reward_rule_2(self):
+        """
+        Rule 2: Facilitates swing (protraction) in anterior & contralateral legs upon touchdown.
+
+        Returns:
+            Tensor: Reward (positive).
+        """
+        contact = self.contact_forces[:, self.feet_indices, 2] > self.cfg.rewards.contact_tresh
+        contact_filt = torch.logical_or(contact, self.last_contacts)
+        liftoff = self.last_contacts & ~contact_filt
+        touchdown = ~self.last_contacts & contact_filt
+        self.last_contacts = contact.clone()
+
+        # Use feet indices directly like the other reward function
+        front_middle_facilitation = torch.any(touchdown[:, [0, 3]] & ~liftoff[:, [1, 4]], dim=1)
+        middle_hind_facilitation = torch.any(touchdown[:, [1, 4]] & ~liftoff[:, [2, 5]], dim=1)
+
+        # Contralateral facilitation (Left ↔ Right)
+        contralateral_facilitation = torch.any(touchdown[:, [0, 3]] & ~liftoff[:, [3, 0]], dim=1)
+        contralateral_facilitation |= torch.any(touchdown[:, [1, 4]] & ~liftoff[:, [4, 1]], dim=1)
+        contralateral_facilitation |= torch.any(touchdown[:, [2, 5]] & ~liftoff[:, [5, 2]], dim=1)
+
+        rule_2_reward = front_middle_facilitation.float() + middle_hind_facilitation.float() + contralateral_facilitation.float()
+
+        movement_active = (torch.norm(self.commands[:, :2], dim=1) > 0.1).float()
+        return rule_2_reward * movement_active
+
+
+    def _reward_rule_3(self):
+        """
+        Rule 3: Encourages swing initiation in posterior & contralateral legs based on stance progress.
+
+        Returns:
+            Tensor: Reward (positive).
+        """
+        contact = self.contact_forces[:, self.feet_indices, 2] > self.cfg.rewards.contact_tresh
+        contact_filt = torch.logical_or(contact, self.last_contacts)
+        self.last_contacts = contact.clone()
+
+        self.contact_flag = contact_filt # Store current contact state as float
+
+        # Define leg contacts
+        middle_leg_contact = contact_filt[:, [1, 4]]  # Middle legs
+        front_leg_contact = contact_filt[:, [0, 3]]  # Front legs
+        hind_leg_contact = contact_filt[:, [2, 5]]  # Hind legs
+
+        # --- Extract Only Middle Leg's Contact Flag ---
+        middle_liftoff_flag = ~self.contact_flag[:, [1, 4]]  # 1 if middle leg is up, 0 if on ground
+        front_liftoff_flag = ~self.contact_flag[:, [0, 3]]  # 1 if front leg is up, 0 if on ground
+        hind_liftoff_flag = ~self.contact_flag[:, [2, 5]]  # 1 if hind leg is up, 0 if on ground
+
+
+
+        # --- Track Time for Middle Leg Liftoff ---
+        self.middle_liftoff_time_lpsi += self.dt  # Increment only when middle leg is up
+        self.middle_liftoff_time_lpsi *= ~middle_leg_contact * ~front_leg_contact  # Reset time when middle leg touches the ground
+        self.middle_liftoff_time_contra += self.dt  # Increment only when middle leg is up
+        self.middle_liftoff_time_contra *= ~middle_leg_contact[:, [0,1]]*~middle_leg_contact[:, [1,0]]  # Reset time when middle leg touches the ground
+
+        # self.front_liftoff_time_lpsi += self.dt  # Increment only when front leg is up
+        # self.front_liftoff_time_lpsi *= ~front_leg_contact  # Reset time when front leg touches the ground
+        self.front_liftoff_time_contra += self.dt  # Increment only when front leg is up
+        self.front_liftoff_time_contra *= ~front_leg_contact[:, [0,1]]*~front_leg_contact[:, [1,0]]  # Reset time when front leg touches the ground
+
+        self.hind_liftoff_time_lpsi += self.dt  # Increment only when hind leg is up
+        self.hind_liftoff_time_lpsi *= ~hind_leg_contact*~middle_leg_contact  # Reset time when hind leg touches the ground
+        self.hind_liftoff_time_contra += self.dt  # Increment only when hind leg is up
+        self.hind_liftoff_time_contra *= ~hind_leg_contact[:, [0,1]]*~hind_leg_contact[:, [1,0]]  # Reset time when hind leg touches the ground
+
+        exp_coeff = self.cfg.rewards.exp_coeff_rule3
+        # --- Exponentially Decreasing Reward for hind Liftoff ---
+        hind_reward = torch.sum(torch.exp(exp_coeff * self.hind_liftoff_time_lpsi)+torch.exp(exp_coeff * self.hind_liftoff_time_contra) ,dim=1) # Decay over time
+        middle_reward = torch.sum(torch.exp(exp_coeff * self.middle_liftoff_time_lpsi)+torch.exp(exp_coeff * self.middle_liftoff_time_contra),dim=1) # Decay over time
+        front_reward = torch.sum(torch.exp(exp_coeff * self.front_liftoff_time_contra),dim=1) # Decay over time
+        #import ipdb;ipdb.set_trace()
+
+
+
+        # Total reward
+        rule_3_reward = hind_reward+middle_reward+front_reward
+
+        # # Apply reward only when moving
+        # rule_3_reward *= torch.norm(self.commands[:, :2], dim=1) > 0.1  # No reward if stationary
+
+        return rule_3_reward
 

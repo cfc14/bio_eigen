@@ -29,13 +29,14 @@
 # Copyright (c) 2021 ETH Zurich, Nikita Rudin
 
 from .base_config import BaseConfig
+import numpy as np
 
 class LeggedRobotCfg(BaseConfig):
     class env:
         num_envs = 4096
         # num_observations = 253
         # num_observations = 258
-        num_observations = 256
+        num_observations = 262
         num_privileged_obs = None # if not None a priviledge_obs_buf will be returned by step() (critic obs for assymetric training). None is returned otherwise 
         num_actions = 12
         env_spacing = 3.  # not used with heightfields/trimeshes 
@@ -67,18 +68,24 @@ class LeggedRobotCfg(BaseConfig):
         # trimesh only:
         slope_treshold = 0.75 # slopes above this threshold will be corrected to vertical surfaces
         rough_flat = False
+        terrain_max_multiplier = 0.2# 0.1 for easy
+        flat_terrain_flag = True
+
+
 
     class commands:
-        curriculum = False
+        curriculum = True
         max_curriculum = 1.
         num_commands = 4 # default: lin_vel_x, lin_vel_y, ang_vel_yaw, heading (in heading mode ang_vel_yaw is recomputed from heading error)
         resampling_time = 10. # time before command are changed[s]
         heading_command = True # if true: compute ang vel command from heading error
+        lin_vel_clip = 0.1
+        rand_heading = True
         class ranges:
-            lin_vel_x = [0., 1.] # min max [m/s]
+            lin_vel_x = [0., 0.5] # min max [m/s]
             lin_vel_y = [0., 0.]   # min max [m/s]
             ang_vel_yaw = [-1, 1]    # min max [rad/s]
-            heading = [-3.14, 3.14]
+            heading = [-np.pi/3, np.pi/3]
 
     class init_state:
         pos = [0.0, 0.0, 1.] # x,y,z [m]
@@ -106,7 +113,7 @@ class LeggedRobotCfg(BaseConfig):
         penalize_contacts_on = []
         terminate_after_contacts_on = []
         disable_gravity = False
-        collapse_fixed_joints = True # merge bodies connected by fixed joints. Specific fixed joints can be kept by adding " <... dont_collapse="true">
+        collapse_fixed_joints = False # merge bodies connected by fixed joints. Specific fixed joints can be kept by adding " <... dont_collapse="true">
         fix_base_link = False # fixe the base of the robot
         default_dof_drive_mode = 3 # see GymDofDriveModeFlags (0 is none, 1 is pos tgt, 2 is vel tgt, 3 effort)
         self_collisions = 0 # 1 to disable, 0 to enable...bitwise filter
@@ -135,36 +142,36 @@ class LeggedRobotCfg(BaseConfig):
             termination = -1.0
             # tracking_lin_vel = 2.0
 
-            # tracking_goal_vel = 2.0 # for flat
-            # delta_yaw = 1.2#0.75 # for flat
+            # tracking_goal_vel = 2.5 # for flat
+            # delta_yaw = 2.0#0.75 # for flat
 
             tracking_goal_vel = 3.0 # for terrain
             delta_yaw = 1.2#0.75
 
             # tracking_ang_vel = 0.5
-            # lin_vel_z = -2#-1 for flat
+            # lin_vel_z = -1.5#-1 for flat
             lin_vel_z = -0.5 # for terrain
 
             lin_vel_x = 0
             lin_vel_y = 0
             # lin_vel_heading= 2.
             
-            #velocity_magnitude=0.5 # why is this here??
+            # velocity_magnitude=0.5 # why is this here??
             #lin_vel_y= -2.0
-            # ang_vel_xy = -1.0#-0.05 for flat
+            # ang_vel_xy = -1.5#-0.05 for flat
             ang_vel_xy = -0.05 # for terrain
 
             
-            orientation = -0.5 # for terrain
-            # orientation = -1.5 # for flat
+            # orientation = -0.0 # for terrain
+            orientation = -1.0 # for flat
 
             torques = -0.00001
-            dof_vel = 0.
+            dof_vel = 0#2.5e-5
             dof_acc = -2.5e-7
             base_height = -0.25
             # feet_air_time = 0.5#1.
             # feet_air_time = 0.75#1.
-            feet_air_time = 0.9#1.
+            # feet_air_time = 0.5#1.
 
 
             # three_feet_on_ground=0.3
@@ -175,6 +182,9 @@ class LeggedRobotCfg(BaseConfig):
             stumble = -1.0#-0.5
             action_rate = -0.01
             stand_still = -0.5
+            rule_1 = 0.35
+            # rule_2 = 0.25
+            # rule_3 = 0.2
 
         only_positive_rewards = False # if true negative total rewards are clipped at zero (avoids early termination problems)
         tracking_sigma = 0.25 # tracking reward = exp(-error^2/sigma)
@@ -184,6 +194,9 @@ class LeggedRobotCfg(BaseConfig):
         base_height_target = 0.2
         max_contact_force = 100. # forces above this value are penalized
         vel_tracking_reward = "tracking_goal_vel"
+        torque_limit_hard = 4
+        contact_tresh = 0.5
+        exp_coeff_rule3 = -10
 
     class normalization:
         class obs_scales:
@@ -229,7 +242,7 @@ class LeggedRobotCfg(BaseConfig):
             rest_offset = 0.0   # [m]
             bounce_threshold_velocity = 0.5 #0.5 [m/s]
             max_depenetration_velocity = 1.0
-            max_gpu_contact_pairs = 2**23 #2**24 -> needed for 8000 envs and more
+            max_gpu_contact_pairs = 2**24#2**23 #2**24 -> needed for 8000 envs and more
             default_buffer_size_multiplier = 5
             contact_collection = 2 # 0: never, 1: last sub-step, 2: all sub-steps (default=2)
 

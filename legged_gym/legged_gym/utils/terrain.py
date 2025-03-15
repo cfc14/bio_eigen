@@ -80,7 +80,7 @@ class Terrain:
             choice = np.random.uniform(0, 1)
             
             #
-            difficulty = np.random.choice([0.5, 0.75, 0.9])
+            difficulty = np.random.choice([0.0,0.1,self.cfg.terrain_max_multiplier])
             if not self.cfg.rough_flat:
                 choice = 0
                 difficulty = 0
@@ -92,7 +92,7 @@ class Terrain:
             for i in range(self.cfg.num_rows):
                 multiplier = 0.0
                 if self.cfg.rough_flat:
-                    multiplier = 0.4
+                    multiplier = self.cfg.terrain_max_multiplier#0.4
                 # import ipdb;ipdb.set_trace()
                 difficulty = i / self.cfg.num_rows*multiplier
                 choice = j / self.cfg.num_cols*multiplier
@@ -121,7 +121,7 @@ class Terrain:
                                 length=self.width_per_env_pixels,
                                 vertical_scale=self.cfg.vertical_scale,
                                 horizontal_scale=self.cfg.horizontal_scale)
-        slope = difficulty * 0.4
+        slope = difficulty * self.cfg.terrain_max_multiplier #0.4
         step_height = 0.05 + 0.18 * difficulty
         discrete_obstacles_height = 0.05 + difficulty * 0.2
         stepping_stones_size = 1.5 * (1.05 - difficulty)
@@ -151,6 +151,8 @@ class Terrain:
         else:
             pit_terrain(terrain, depth=pit_depth, platform_size=4.)
         
+        # if difficulty == 0:
+        #     flat_terrain_flag = True
         return terrain
 
     def add_terrain_to_map(self, terrain, row, col):

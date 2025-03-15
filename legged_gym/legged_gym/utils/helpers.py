@@ -144,6 +144,8 @@ def update_cfg_from_args(env_cfg, cfg_train, args):
             cfg_train.runner.experiment_name = args.experiment_name
         if args.run_name is not None:
             cfg_train.runner.run_name = args.run_name
+        if args.expt_id is not None:
+            cfg_train.runner.expt_id = args. expt_id
         if args.load_run is not None:
             cfg_train.runner.load_run = args.load_run
         if args.checkpoint is not None:
@@ -159,7 +161,8 @@ def get_args():
         {"name": "--task", "type": str, "default": "anymal_c_flat", "help": "Resume training or start testing from a checkpoint. Overrides config file if provided."},
         {"name": "--resume", "action": "store_true", "default": False,  "help": "Resume training from a checkpoint"},
         {"name": "--experiment_name", "type": str,  "help": "Name of the experiment to run or load. Overrides config file if provided."},
-        {"name": "--run_name", "type": str,  "help": "Name of the run. Overrides config file if provided."},
+        {"name": "--run_name", "type": str, "default":"new", "help": "Name of the run. Overrides config file if provided."},
+        {"name": "--expt_id", "type": str, "default": "00-001", "help": "Name of the run. Overrides config file if provided."},
         {"name": "--load_run", "type": str,  "help": "Name of the run to load when resume=True. If -1: will load the last run. Overrides config file if provided."},
         {"name": "--checkpoint", "type": int,  "help": "Saved model checkpoint number. If -1: will load the last checkpoint. Overrides config file if provided."},
         

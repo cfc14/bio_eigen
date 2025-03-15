@@ -30,6 +30,7 @@
 
 from legged_gym import LEGGED_GYM_ROOT_DIR
 import os
+import glob 
 
 import isaacgym
 from legged_gym.envs import *
@@ -46,9 +47,11 @@ def play(args):
     env_cfg.terrain.num_rows = 5
     env_cfg.terrain.num_cols = 5
     env_cfg.terrain.curriculum = False
+    # env_cfg.terrain.terrain_max_multiplier = 0.2
     env_cfg.noise.add_noise = False
     env_cfg.domain_rand.randomize_friction = False
     env_cfg.domain_rand.push_robots = False
+
     env_cfg.commands.ranges.lin_vel_x = [0.2,0.4]
     env_cfg.viewer.show_heading=args.show_heading
 
@@ -59,9 +62,15 @@ def play(args):
     train_cfg.runner.resume = True
     ppo_runner, train_cfg = task_registry.make_alg_runner(env=env, name=args.task, args=args, train_cfg=train_cfg)
     policy = ppo_runner.get_inference_policy(device=env.device)
+
+    # expt_path = os.path.join(log_root, train_cfg.runner.expt_id + "_*")
+    # matching_runs = sorted(glob.glob(expt_path))
+    # if len(matching_runs) == 0:
+    #     raise ValueError(f"No runs found for experiment ID: {train_cfg.runner.expt_id} in {log_root}")  
     
     # export policy as a jit module (used to run it from C++)
     if EXPORT_POLICY:
+
         path = os.path.join(LEGGED_GYM_ROOT_DIR, 'logs', train_cfg.runner.experiment_name, 'exported', 'policies')
         export_policy_as_jit(ppo_runner.alg.actor_critic, path)
         print('Exported policy as jit script to: ', path)
@@ -101,6 +110,7 @@ def play(args):
                     'base_vel_x': env.base_lin_vel[robot_index, 0].item(),
                     'base_vel_y': env.base_lin_vel[robot_index, 1].item(),
                     'base_vel_z': env.base_lin_vel[robot_index, 2].item(),
+                    # 'base_height': (env.root_states[robot_index,2]-env.measured_heights[robot_index]) .item(),   
                     'base_vel_yaw': env.base_ang_vel[robot_index, 2].item(),
                     'contact_forces_z': env.contact_forces[robot_index, env.feet_indices, 2].cpu().numpy()
                 }
