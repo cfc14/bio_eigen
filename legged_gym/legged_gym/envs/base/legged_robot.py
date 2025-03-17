@@ -100,6 +100,9 @@ class LeggedRobot(BaseTask):
         self.contact_flag = torch.zeros(6)
         self.flat_tensor = None
 
+        self.resize_transform = torchvision.transforms.Resize((self.cfg.depth.resized[1], self.cfg.depth.resized[0]), 
+                                                              interpolation=torchvision.transforms.InterpolationMode.BICUBIC)
+
         
 
         self._parse_cfg(self.cfg)
@@ -181,9 +184,19 @@ class LeggedRobot(BaseTask):
         # self.timestep += 1
         #actions=self.action_delay_buffer[:,:,0]
 
+
         # Clip actions based on config constraints
         clip_actions = self.cfg.normalization.clip_actions
         self.actions = torch.clip(actions, -clip_actions, clip_actions).to(self.device)
+        self.action_history_buf = torch.cat([self.action_history_buf[:, 1:].clone(), actions[:, None, :].clone()], dim=1)
+        if self.cfg.domain_rand.action_delay:
+            if self.global_counter % self.cfg.domain_rand.delay_update_global_steps == 0:
+                if len(self.cfg.domain_rand.action_curr_step) != 0:
+                    self.delay = torch.tensor(self.cfg.domain_rand.action_curr_step.pop(0), device=self.device, dtype=torch.float)
+            if self.viewer:
+                self.delay = torch.tensor(self.cfg.domain_rand.action_delay_view, device=self.device, dtype=torch.float)
+            indices = -self.delay -1
+            actions = self.action_history_buf[:, indices.long()] # delay for 1/50=20ms
         # clip_nn_actions = self.cfg.normalization.clip_actions
         # self.nn_actions = torch.clip(self.nn_actions, -clip_nn_actions, clip_nn_actions).to(self.device)
         # step physics and render each frame
@@ -202,7 +215,62 @@ class LeggedRobot(BaseTask):
         self.obs_buf = torch.clip(self.obs_buf, -clip_obs, clip_obs)
         if self.privileged_obs_buf is not None:
             self.privileged_obs_buf = torch.clip(self.privileged_obs_buf, -clip_obs, clip_obs)
+        if self.cfg.depth.use_camera and self.global_counter % self.cfg.depth.update_interval == 0:
+            self.extras["depth"] = self.depth_buffer[:, -2]  # have already selected last one
+        else:
+            self.extras["depth"] = None
         return self.obs_buf, self.privileged_obs_buf, self.rew_buf, self.reset_buf, self.extras
+    def get_history_observations(self):
+        return self.obs_history_buf
+    
+    def normalize_depth_image(self, depth_image):
+        depth_image = depth_image * -1
+        depth_image = (depth_image - self.cfg.depth.near_clip) / (self.cfg.depth.far_clip - self.cfg.depth.near_clip)  - 0.5
+        return depth_image
+    
+    def process_depth_image(self, depth_image, env_id):
+        # These operations are replicated on the hardware
+        depth_image = self.crop_depth_image(depth_image)
+        depth_image += self.cfg.depth.dis_noise * 2 * (torch.rand(1)-0.5)[0]
+        depth_image = torch.clip(depth_image, -self.cfg.depth.far_clip, -self.cfg.depth.near_clip)
+        depth_image = self.resize_transform(depth_image[None, :]).squeeze()
+        depth_image = self.normalize_depth_image(depth_image)
+        return depth_image
+
+    def crop_depth_image(self, depth_image):
+        # crop 30 pixels from the left and right and and 20 pixels from bottom and return croped image
+        return depth_image[:-2, 4:-4]
+
+    def update_depth_buffer(self):
+        if not self.cfg.depth.use_camera:
+            return
+    def update_depth_buffer(self):
+        if not self.cfg.depth.use_camera:
+            return
+
+        if self.global_counter % self.cfg.depth.update_interval != 0:
+            return
+        self.gym.step_graphics(self.sim) # required to render in headless mode
+        self.gym.render_all_camera_sensors(self.sim)
+        self.gym.start_access_image_tensors(self.sim)
+
+        for i in range(self.num_envs):
+            depth_image_ = self.gym.get_camera_image_gpu_tensor(self.sim, 
+                                                                self.envs[i], 
+                                                                self.cam_handles[i],
+                                                                gymapi.IMAGE_DEPTH)
+            
+            depth_image = gymtorch.wrap_tensor(depth_image_)
+            depth_image = self.process_depth_image(depth_image, i)
+
+            init_flag = self.episode_length_buf <= 1
+            if init_flag[i]:
+                self.depth_buffer[i] = torch.stack([depth_image] * self.cfg.depth.buffer_len, dim=0)
+            else:
+                self.depth_buffer[i] = torch.cat([self.depth_buffer[i, 1:], depth_image.to(self.device).unsqueeze(0)], dim=0)
+
+        self.gym.end_access_image_tensors(self.sim)
+    
 
     def post_physics_step(self):
         """ check terminations, compute observations and rewards
@@ -241,6 +309,13 @@ class LeggedRobot(BaseTask):
         self.last_actions[:] = self.actions[:]
         self.last_dof_vel[:] = self.dof_vel[:]
         self.last_root_vel[:] = self.root_states[:, 7:13]
+
+        self.update_depth_buffer()
+        #  if self.cfg.depth.use_camera:
+        #         window_name = "Depth Image"
+        #         cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
+        #         cv2.imshow("Depth Image", self.depth_buffer[self.lookat_id, -1].cpu().numpy() + 0.5)
+        #         cv2.waitKey(1)
 
         if self.viewer and self.enable_viewer_sync and self.debug_viz:
             self._draw_debug_vis()
@@ -288,6 +363,8 @@ class LeggedRobot(BaseTask):
         self.last_dof_vel[env_ids] = 0.
         self.feet_air_time[env_ids] = 0.
         self.episode_length_buf[env_ids] = 0
+        self.obs_history_buf[env_ids, :, :] = 0.
+        self.action_history_buf[env_ids, :, :] = 0.
         self.reset_buf[env_ids] = 1
         # fill extras
         self.extras["episode"] = {}
@@ -362,6 +439,38 @@ class LeggedRobot(BaseTask):
                                     self.actions,
                                     self.contact_filt.float()-0.5
                                     ),dim=-1)
+        # priv_explicit = torch.cat((self.base_lin_vel * self.obs_scales.lin_vel,
+        #                            0 * self.base_lin_vel,
+        #                            0 * self.base_lin_vel), dim=-1)
+        # priv_latent = torch.cat((
+        #     self.mass_params_tensor,
+        #     self.friction_coeffs_tensor,
+        #     self.motor_strength[0] - 1, 
+        #     self.motor_strength[1] - 1
+        # ), dim=-1)
+        # if self.cfg.terrain.measure_heights:
+        #     heights = torch.clip(self.root_states[:, 2].unsqueeze(1) - 0.3 - self.measured_heights, -1, 1.)
+        #     self.obs_buf = torch.cat([obs_buf, heights, priv_explicit, priv_latent, self.obs_history_buf.view(self.num_envs, -1)], dim=-1)
+        # else:
+        #     self.obs_buf = torch.cat([obs_buf, priv_explicit, priv_latent, self.obs_history_buf.view(self.num_envs, -1)], dim=-1)
+        # obs_buf[:, 6:8] = 0  # mask yaw in proprioceptive history
+        # self.obs_history_buf = torch.where(
+        #     (self.episode_length_buf <= 1)[:, None, None], 
+        #     torch.stack([obs_buf] * self.cfg.env.history_len, dim=1),
+        #     torch.cat([
+        #         self.obs_history_buf[:, 1:],
+        #         obs_buf.unsqueeze(1)
+        #     ], dim=1)
+        # )
+
+        # self.contact_buf = torch.where(
+        #     (self.episode_length_buf <= 1)[:, None, None], 
+        #     torch.stack([self.contact_filt.float()] * self.cfg.env.contact_buf_len, dim=1),
+        #     torch.cat([
+        #         self.contact_buf[:, 1:],
+        #         self.contact_filt.float().unsqueeze(1)
+        #     ], dim=1)
+        # )
         # add perceptive inputs if not blind
         if self.cfg.terrain.measure_heights:
             heights = torch.clip(self.root_states[:, 2].unsqueeze(1) - 0.5 - self.measured_heights, -1, 1.) * self.obs_scales.height_measurements
@@ -941,6 +1050,11 @@ class LeggedRobot(BaseTask):
         if self.cfg.terrain.measure_heights:
             self.height_points = self._init_height_points()
         self.measured_heights = 0
+        
+        if self.cfg.env.history_encoding:
+            self.obs_history_buf = torch.zeros(self.num_envs, self.cfg.env.history_len, self.cfg.env.n_proprio, device=self.device, dtype=torch.float)
+        self.action_history_buf = torch.zeros(self.num_envs, self.cfg.domain_rand.action_buf_len, self.num_dofs, device=self.device, dtype=torch.float)
+        self.contact_buf = torch.zeros(self.num_envs, self.cfg.env.contact_buf_len, 4, device=self.device, dtype=torch.float)
 
         # joint positions offsets and PD gains
         self.default_dof_pos = torch.zeros(self.num_dof, dtype=torch.float, device=self.device, requires_grad=False)
@@ -962,6 +1076,11 @@ class LeggedRobot(BaseTask):
                 if self.cfg.control.control_type in ["P", "V"]:
                     print(f"PD gain of joint {name} were not defined, setting them to zero")
         self.default_dof_pos = self.default_dof_pos.unsqueeze(0)
+        if self.cfg.depth.use_camera:
+            self.depth_buffer = torch.zeros(self.num_envs,  
+                                            self.cfg.depth.buffer_len, 
+                                            self.cfg.depth.resized[1], 
+                                            self.cfg.depth.resized[0]).to(self.device)
 
     def _prepare_reward_function(self):
         """ Prepares a list of reward functions, whcih will be called to compute the total reward.
@@ -1032,6 +1151,29 @@ class LeggedRobot(BaseTask):
         tm_params.restitution = self.cfg.terrain.restitution
         self.gym.add_triangle_mesh(self.sim, self.terrain.vertices.flatten(order='C'), self.terrain.triangles.flatten(order='C'), tm_params)   
         self.height_samples = torch.tensor(self.terrain.heightsamples).view(self.terrain.tot_rows, self.terrain.tot_cols).to(self.device)
+    # def attach_camera(self, i, env_handle, actor_handle):
+    #     if self.cfg.depth.use_camera:
+    #         config = self.cfg.depth
+    #         camera_props = gymapi.CameraProperties()
+    #         camera_props.width = self.cfg.depth.original[0]
+    #         camera_props.height = self.cfg.depth.original[1]
+    #         camera_props.enable_tensors = True
+    #         camera_horizontal_fov = self.cfg.depth.horizontal_fov 
+    #         camera_props.horizontal_fov = camera_horizontal_fov
+
+    #         camera_handle = self.gym.create_camera_sensor(env_handle, camera_props)
+    #         self.cam_handles.append(camera_handle)
+            
+    #         local_transform = gymapi.Transform()
+            
+    #         camera_position = np.copy(config.position)
+    #         camera_angle = np.random.uniform(config.angle[0], config.angle[1])
+            
+    #         local_transform.p = gymapi.Vec3(*camera_position)
+    #         local_transform.r = gymapi.Quat.from_euler_zyx(0, np.radians(camera_angle), 0)
+    #         root_handle = self.gym.get_actor_root_rigid_body_handle(env_handle, actor_handle)
+            
+    #         self.gym.attach_camera_to_body(camera_handle, env_handle, root_handle, local_transform, gymapi.FOLLOW_TRANSFORM)
 
     def _create_envs(self):
         """ Creates environments:
