@@ -35,7 +35,7 @@ import torch.nn as nn
 from torch.distributions import Normal
 from torch.nn.modules import rnn
 
-Encoder
+
 class StateHistoryEncoder(nn.Module):
     def __init__(self, activation_fn, input_size, tsteps, output_size, tanh_encoder_output=False):
         # self.device = device
@@ -203,104 +203,6 @@ class Actor(nn.Module):
         scan = obs[:, self.num_prop:self.num_prop + self.num_scan]
         return self.scan_encoder(scan)
 
-class ActorCriticRMA(nn.Module):
-    is_recurrent = False
-    def __init__(self,  num_prop,
-                        num_scan,
-                        num_critic_obs,
-                        num_priv_latent, 
-                        num_priv_explicit,
-                        num_hist,
-                        num_actions,
-                        scan_encoder_dims=[256, 256, 256],
-                        actor_hidden_dims=[256, 256, 256],
-                        critic_hidden_dims=[256, 256, 256],
-                        activation='elu',
-                        init_noise_std=1.0,
-                        **kwargs):
-        if kwargs:
-            print("ActorCritic.__init__ got unexpected arguments, which will be ignored: " + str([key for key in kwargs.keys()]))
-        super(ActorCriticRMA, self).__init__()
-
-        self.kwargs = kwargs
-        priv_encoder_dims= kwargs['priv_encoder_dims']
-        activation = get_activation(activation)
-        
-        self.actor = Actor(num_prop, num_scan, num_actions, scan_encoder_dims, actor_hidden_dims, priv_encoder_dims, num_priv_latent, num_priv_explicit, num_hist, activation, tanh_encoder_output=kwargs['tanh_encoder_output'])
-        
-
-        # Value function
-        critic_layers = []
-        critic_layers.append(nn.Linear(num_critic_obs, critic_hidden_dims[0]))
-        critic_layers.append(activation)
-        for l in range(len(critic_hidden_dims)):
-            if l == len(critic_hidden_dims) - 1:
-                critic_layers.append(nn.Linear(critic_hidden_dims[l], 1))
-            else:
-                critic_layers.append(nn.Linear(critic_hidden_dims[l], critic_hidden_dims[l + 1]))
-                critic_layers.append(activation)
-        self.critic = nn.Sequential(*critic_layers)
-
-        # Action noise
-        self.std = nn.Parameter(init_noise_std * torch.ones(num_actions))
-        self.distribution = None
-        # disable args validation for speedup
-        Normal.set_default_validate_args = False
-        
-        # seems that we get better performance without init
-        # self.init_memory_weights(self.memory_a, 0.001, 0.)
-        # self.init_memory_weights(self.memory_c, 0.001, 0.)
-    
-    @staticmethod
-    # not used at the moment
-    def init_weights(sequential, scales):
-        [torch.nn.init.orthogonal_(module.weight, gain=scales[idx]) for idx, module in
-         enumerate(mod for mod in sequential if isinstance(mod, nn.Linear))]
-
-    def reset(self, dones=None):
-        pass
-
-    def forward(self):
-        raise NotImplementedError
-    
-    @property
-    def action_mean(self):
-        return self.distribution.mean
-
-    @property
-    def action_std(self):
-        return self.distribution.stddev
-    
-    @property
-    def entropy(self):
-        return self.distribution.entropy().sum(dim=-1)
-
-    def update_distribution(self, observations, hist_encoding):
-        mean = self.actor(observations, hist_encoding)
-        self.distribution = Normal(mean, mean*0. + self.std)
-
-    def act(self, observations, hist_encoding=False, **kwargs):
-        self.update_distribution(observations, hist_encoding)
-        return self.distribution.sample()
-    
-    def get_actions_log_prob(self, actions):
-        return self.distribution.log_prob(actions).sum(dim=-1)
-
-    def act_inference(self, observations, hist_encoding=False, eval=False, scandots_latent=None, **kwargs):
-        if not eval:
-            actions_mean = self.actor(observations, hist_encoding, eval, scandots_latent)
-            return actions_mean
-        else:
-            actions_mean, latent_hist, latent_priv = self.actor(observations, hist_encoding, eval=True)
-            return actions_mean, latent_hist, latent_priv
-
-    def evaluate(self, critic_observations, **kwargs):
-        value = self.critic(critic_observations)
-        return value
-    
-    def reset_std(self, std, num_actions, device):
-        new_std = std * torch.ones(num_actions, device=device)
-        self.std.data = new_std.data
 
 
 class ActorCritic(nn.Module):
@@ -473,6 +375,106 @@ class ActorCritic(nn.Module):
     # def infer_scandots_latent(self, obs):
     #     scan = obs[:, self.num_prop:self.num_prop + self.num_scan]
     #     return self.scan_encoder(scan)
+class ActorCriticRMA(nn.Module):
+    is_recurrent = False
+    def __init__(self,  num_prop,
+                        num_scan,
+                        num_critic_obs,
+                        num_priv_latent, 
+                        num_priv_explicit,
+                        num_hist,
+                        num_actions,
+                        scan_encoder_dims=[256, 256, 256],
+                        actor_hidden_dims=[256, 256, 256],
+                        critic_hidden_dims=[256, 256, 256],
+                        activation='elu',
+                        init_noise_std=1.0,
+                        **kwargs):
+        if kwargs:
+            print("ActorCritic.__init__ got unexpected arguments, which will be ignored: " + str([key for key in kwargs.keys()]))
+        super(ActorCriticRMA, self).__init__()
+
+        self.kwargs = kwargs
+        priv_encoder_dims= kwargs['priv_encoder_dims']
+        activation = get_activation(activation)
+        
+        self.actor = Actor(num_prop, num_scan, num_actions, scan_encoder_dims, actor_hidden_dims, priv_encoder_dims, num_priv_latent, num_priv_explicit, num_hist, activation, tanh_encoder_output=kwargs['tanh_encoder_output'])
+        
+
+        # Value function
+        critic_layers = []
+        critic_layers.append(nn.Linear(num_critic_obs, critic_hidden_dims[0]))
+        critic_layers.append(activation)
+        for l in range(len(critic_hidden_dims)):
+            if l == len(critic_hidden_dims) - 1:
+                critic_layers.append(nn.Linear(critic_hidden_dims[l], 1))
+            else:
+                critic_layers.append(nn.Linear(critic_hidden_dims[l], critic_hidden_dims[l + 1]))
+                critic_layers.append(activation)
+        self.critic = nn.Sequential(*critic_layers)
+
+        # Action noise
+        self.std = nn.Parameter(init_noise_std * torch.ones(num_actions))
+        self.distribution = None
+        # disable args validation for speedup
+        Normal.set_default_validate_args = False
+        
+        # seems that we get better performance without init
+        # self.init_memory_weights(self.memory_a, 0.001, 0.)
+        # self.init_memory_weights(self.memory_c, 0.001, 0.)
+    
+    @staticmethod
+    # not used at the moment
+    def init_weights(sequential, scales):
+        [torch.nn.init.orthogonal_(module.weight, gain=scales[idx]) for idx, module in
+         enumerate(mod for mod in sequential if isinstance(mod, nn.Linear))]
+
+    def reset(self, dones=None):
+        pass
+
+    def forward(self):
+        raise NotImplementedError
+    
+    @property
+    def action_mean(self):
+        return self.distribution.mean
+
+    @property
+    def action_std(self):
+        return self.distribution.stddev
+    
+    @property
+    def entropy(self):
+        return self.distribution.entropy().sum(dim=-1)
+
+    def update_distribution(self, observations, hist_encoding):
+        mean = self.actor(observations, hist_encoding)
+        self.distribution = Normal(mean, mean*0. + self.std)
+
+    def act(self, observations, hist_encoding=False, **kwargs):
+        self.update_distribution(observations, hist_encoding)
+        return self.distribution.sample()
+    
+    def get_actions_log_prob(self, actions):
+        return self.distribution.log_prob(actions).sum(dim=-1)
+
+    def act_inference(self, observations, hist_encoding=False, eval=False, scandots_latent=None, **kwargs):
+        if not eval:
+            actions_mean = self.actor(observations, hist_encoding, eval, scandots_latent)
+            return actions_mean
+        else:
+            actions_mean, latent_hist, latent_priv = self.actor(observations, hist_encoding, eval=True)
+            return actions_mean, latent_hist, latent_priv
+
+    def evaluate(self, critic_observations, **kwargs):
+        #import ipdb; ipdb.set_trace()
+        value = self.critic(critic_observations)
+        return value
+    
+    def reset_std(self, std, num_actions, device):
+        new_std = std * torch.ones(num_actions, device=device)
+        self.std.data = new_std.data
+
 
 def get_activation(act_name):
     if act_name == "elu":

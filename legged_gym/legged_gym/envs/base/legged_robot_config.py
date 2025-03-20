@@ -36,14 +36,15 @@ class LeggedRobotCfg(BaseConfig):
         num_envs = 4096
         # num_observations = 253
         # num_observations = 258
-        n_scan=132
         n_history = 10
         n_scan = 132
         n_priv = 3+3 +3
-        n_priv_latent = 4 + 1 + 12 +12
-        n_proprio = 3 + 2 + 3 + 4 + 36 + 5
+        n_priv_latent = 4 + 1 + 18 +18
+        n_proprio = 3+3+2+1+3+1+18+18+1+1+18+6#3 + 2 + 3 + 4 + 36 + 5
         history_len = 10
-        num_observations = 262
+        #num_observations = 207
+        num_observations = n_proprio + n_scan + history_len*n_proprio + n_priv_latent + n_priv #n_scan + n_proprio + n_priv #187 + 47 + 5 + 12 
+
         num_privileged_obs = None # if not None a priviledge_obs_buf will be returned by step() (critic obs for assymetric training). None is returned otherwise 
         num_actions = 12
         env_spacing = 3.  # not used with heightfields/trimeshes 
@@ -52,6 +53,7 @@ class LeggedRobotCfg(BaseConfig):
 
         history_encoding = True
         # action_delay_range = [0, 5]
+        contact_buf_len = 100
 
 
     class depth:
@@ -88,8 +90,11 @@ class LeggedRobotCfg(BaseConfig):
         restitution = 0.
         # rough terrain only:
         measure_heights = True
-        measured_points_x = [-0.8, -0.7, -0.6, -0.5, -0.4, -0.3, -0.2, -0.1, 0., 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8] # 1mx1.6m rectangle (without center line)
-        measured_points_y = [-0.5, -0.4, -0.3, -0.2, -0.1, 0., 0.1, 0.2, 0.3, 0.4, 0.5]
+        # measured_points_x = [-0.8, -0.7, -0.6, -0.5, -0.4, -0.3, -0.2, -0.1, 0., 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8] # 1mx1.6m rectangle (without center line)
+        # measured_points_y = [-0.5, -0.4, -0.3, -0.2, -0.1, 0., 0.1, 0.2, 0.3, 0.4, 0.5]
+        measured_points_x = [-0.45, -0.3, -0.15, 0, 0.15, 0.3, 0.45, 0.6, 0.75, 0.9, 1.05, 1.2] # 1mx1.6m rectangle (without center line)
+        measured_points_y = [-0.75, -0.6, -0.45, -0.3, -0.15, 0., 0.15, 0.3, 0.45, 0.6, 0.75]
+        measure_horizontal_noise = 0
         selected = False # select a unique terrain type and pass all arguments
         terrain_kwargs = None # Dict of arguments for selected terrain
         max_init_terrain_level = 5 # starting curriculum state
@@ -171,6 +176,22 @@ class LeggedRobotCfg(BaseConfig):
         push_interval_s = 15
         max_push_vel_xy = 1.
         action_delay = False
+        motor_strength_range = [0.8, 1.2]
+        action_buf_len = 8
+
+        
+        randomize_base_com = True
+        added_com_range = [-0.2, 0.2]
+        
+
+        randomize_motor = True
+        motor_strength_range = [0.8, 1.2]
+
+        delay_update_global_steps = 24 * 8000
+        action_delay = False
+        action_curr_step = [1, 1]
+        action_curr_step_scratch = [0, 1]
+        action_delay_view = 1
 
     class rewards:
         class scales:
@@ -298,6 +319,7 @@ class LeggedRobotCfgPPO(BaseConfig):
         # rnn_type = 'lstm'
         # rnn_hidden_size = 512
         # rnn_num_layers = 1
+        tanh_encoder_output = False
         
     class algorithm:
         # training params

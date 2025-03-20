@@ -33,6 +33,8 @@ import torch.nn as nn
 import torch.optim as optim
 
 from rsl_rl.modules import ActorCritic
+from rsl_rl.modules import ActorCriticRMA
+
 from rsl_rl.storage import RolloutStorage
 
 class RMS(object):
@@ -53,11 +55,14 @@ class RMS(object):
 
         return self.M, self.S
 class PPO:
-    actor_critic: ActorCritic
+    actor_critic: ActorCriticRMA
     def __init__(self,
                  actor_critic,
                  estimator,
                  estimator_paras,
+                 depth_encoder,
+                 depth_encoder_paras,
+                 depth_actor,
                  num_learning_epochs=1,
                  num_mini_batches=1,
                  clip_param=0.2,
@@ -71,6 +76,9 @@ class PPO:
                  schedule="fixed",
                  desired_kl=0.01,
                  device='cpu',
+                 dagger_update_freq=20,
+                 priv_reg_coef_schedual = [0, 0, 0],
+                 **kwargs
                  ):
 
         self.device = device
@@ -130,7 +138,7 @@ class PPO:
     def train_mode(self):
         self.actor_critic.train()
 
-    def act(self, obs, critic_obs):
+    def act(self, obs, critic_obs, info, hist_encoding=False):
         if self.actor_critic.is_recurrent:
             self.transition.hidden_states = self.actor_critic.get_hidden_states()
          # Compute the actions and values, use proprio to compute estimated priv_states then actions, but store true priv_states
@@ -144,7 +152,7 @@ class PPO:
 
     
         # Compute the actions and values
-        self.transition.actions = self.actor_critic.act(obs).detach() #This is extra here
+        # self.transition.actions = self.actor_critic.act(obs).detach() #This is extra here
         self.transition.values = self.actor_critic.evaluate(critic_obs).detach()
         self.transition.actions_log_prob = self.actor_critic.get_actions_log_prob(self.transition.actions).detach()
         self.transition.action_mean = self.actor_critic.action_mean.detach()
@@ -155,7 +163,19 @@ class PPO:
         return self.transition.actions
     
     def process_env_step(self, rewards, dones, infos):
-        self.transition.rewards = rewards.clone()
+        # self.transition.rewards = rewards.clone()
+        # self.transition.dones = dones
+        # # Bootstrapping on time outs
+        # if 'time_outs' in infos:
+        #     self.transition.rewards += self.gamma * torch.squeeze(self.transition.values * infos['time_outs'].unsqueeze(1).to(self.device), 1)
+
+        # # Record the transition
+        # self.storage.add_transitions(self.transition)
+        # self.transition.clear()
+        # self.actor_critic.reset(dones)
+        rewards_total = rewards.clone()
+
+        self.transition.rewards = rewards_total.clone()
         self.transition.dones = dones
         # Bootstrapping on time outs
         if 'time_outs' in infos:
@@ -165,6 +185,8 @@ class PPO:
         self.storage.add_transitions(self.transition)
         self.transition.clear()
         self.actor_critic.reset(dones)
+
+        return rewards_total
     
     def compute_returns(self, last_critic_obs):
         last_values= self.actor_critic.evaluate(last_critic_obs).detach()
@@ -173,6 +195,10 @@ class PPO:
     def update(self):
         mean_value_loss = 0
         mean_surrogate_loss = 0
+        mean_estimator_loss = 0
+        mean_discriminator_loss = 0
+        mean_discriminator_acc = 0
+        mean_priv_reg_loss = 0
         if self.actor_critic.is_recurrent:
             generator = self.storage.reccurent_mini_batch_generator(self.num_mini_batches, self.num_learning_epochs)
         else:
@@ -241,11 +267,11 @@ class PPO:
                 else:
                     value_loss = (returns_batch - value_batch).pow(2).mean()
 
-                loss = surrogate_loss + self.value_loss_coef * value_loss - self.entropy_coef * entropy_batch.mean()
-                # loss = surrogate_loss + \
-                #        self.value_loss_coef * value_loss - \
-                #        self.entropy_coef * entropy_batch.mean() + \
-                #        priv_reg_coef * priv_reg_loss
+                #loss = surrogate_loss + self.value_loss_coef * value_loss - self.entropy_coef * entropy_batch.mean()
+                loss = surrogate_loss + \
+                       self.value_loss_coef * value_loss - \
+                       self.entropy_coef * entropy_batch.mean() + \
+                       priv_reg_coef * priv_reg_loss
 
                 # Gradient step
                 self.optimizer.zero_grad()

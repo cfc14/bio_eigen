@@ -38,8 +38,11 @@ from torch.utils.tensorboard import SummaryWriter
 import torch
 
 from rsl_rl.algorithms import PPO
-from rsl_rl.modules import ActorCritic, ActorCriticRecurrent
+from rsl_rl.modules import ActorCritic, ActorCriticRecurrent, ActorCriticRMA,Estimator
 from rsl_rl.env import VecEnv
+from copy import copy, deepcopy
+
+
 
 
 class OnPolicyRunner:
@@ -57,6 +60,7 @@ class OnPolicyRunner:
         self.depth_encoder_cfg = train_cfg["depth_encoder"]
         self.device = device
         self.env = env
+        #import ipdb; ipdb.set_trace()
 
         print("Using MLP and Priviliged Env encoder ActorCritic structure")
         actor_critic: ActorCriticRMA = ActorCriticRMA(self.env.cfg.env.n_proprio,
@@ -112,6 +116,7 @@ class OnPolicyRunner:
                                   estimator, self.estimator_cfg, 
                                   depth_encoder, self.depth_encoder_cfg, depth_actor,
                                   device=self.device, **self.alg_cfg)
+        
         self.num_steps_per_env = self.cfg["num_steps_per_env"]
         self.save_interval = self.cfg["save_interval"]
         self.dagger_update_freq = self.alg_cfg["dagger_update_freq"]
@@ -143,9 +148,9 @@ class OnPolicyRunner:
         mean_priv_reg_loss = 0. 
         priv_reg_coef = 0.
         entropy_coef = 0.
-        # initialize writer
-        # if self.log_dir is not None and self.writer is None:
-        #     self.writer = SummaryWriter(log_dir=self.log_dir, flush_secs=10)
+        #initialize writer
+        if self.log_dir is not None and self.writer is None:
+            self.writer = SummaryWriter(log_dir=self.log_dir, flush_secs=10)
         if init_at_random_ep_len:
             self.env.episode_length_buf = torch.randint_like(self.env.episode_length_buf, high=int(self.env.max_episode_length))
         obs = self.env.get_observations()
@@ -176,16 +181,19 @@ class OnPolicyRunner:
             # Rollout
             with torch.inference_mode():
                 for i in range(self.num_steps_per_env):
+                    #import ipdb; ipdb.set_trace()
                     actions = self.alg.act(obs, critic_obs, infos, hist_encoding)
                     obs, privileged_obs, rewards, dones, infos = self.env.step(actions)  # obs has changed to next_obs !! if done obs has been reset
                     critic_obs = privileged_obs if privileged_obs is not None else obs
                     obs, critic_obs, rewards, dones = obs.to(self.device), critic_obs.to(self.device), rewards.to(self.device), dones.to(self.device)
                     total_rew = self.alg.process_env_step(rewards, dones, infos)
+                    #obs, _, rews, dones, infos = env.step(actions.detach())
                     
                     if self.log_dir is not None:
                         # Book keeping
                         if 'episode' in infos:
                             ep_infos.append(infos['episode'])
+                        #import ipdb; ipdb.set_trace()
                         cur_reward_sum += total_rew
                         cur_reward_explr_sum += 0
                         cur_reward_entropy_sum += 0
