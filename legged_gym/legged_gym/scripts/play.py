@@ -49,7 +49,7 @@ def play(args):
     env_cfg.terrain.curriculum = False
     # env_cfg.terrain.terrain_max_multiplier = 0.2
     env_cfg.noise.add_noise = False
-    env_cfg.domain_rand.randomize_friction = False
+    env_cfg.domain_rand.randomize_friction = True
     env_cfg.domain_rand.push_robots = False
 
     env_cfg.commands.ranges.lin_vel_x = [0.2,0.4]
@@ -117,16 +117,16 @@ def play(args):
             )
         elif i==stop_state_log:
             logger.plot_states()
-        if  0 < i < stop_rew_log:
-            if infos["episode"]:
-                num_episodes = torch.sum(env.reset_buf).item()
-                if num_episodes>0:
-                    logger.log_rewards(infos["episode"], num_episodes)
-        elif i==stop_rew_log:
-            logger.print_rewards()
+        # if  0 < i < stop_rew_log:
+        #     if infos["episode"]:
+        #         num_episodes = torch.sum(env.reset_buf).item()
+        #         if num_episodes>0:
+        #             logger.log_rewards(infos["episode"], num_episodes)
+        # elif i==stop_rew_log:
+        #     logger.print_rewards()
 
 if __name__ == '__main__':
-    EXPORT_POLICY = True
+    EXPORT_POLICY = False
     RECORD_FRAMES = False
     MOVE_CAMERA = False
     args = get_args()

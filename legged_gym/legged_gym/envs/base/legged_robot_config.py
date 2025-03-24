@@ -31,6 +31,8 @@
 from .base_config import BaseConfig
 import numpy as np
 
+num_steps = 36#48 # original 24, changed to 48 for 2048 envs
+
 class LeggedRobotCfg(BaseConfig):
     class env:
         num_envs = 4096
@@ -198,15 +200,15 @@ class LeggedRobotCfg(BaseConfig):
             termination = -1.0
             # tracking_lin_vel = 2.0
 
-            # tracking_goal_vel = 2.5 # for flat
-            # delta_yaw = 2.0#0.75 # for flat
+            tracking_goal_vel = 2.5 # for flat
+            delta_yaw = 2.0#0.75 # for flat
 
-            tracking_goal_vel = 3.0 # for terrain
-            delta_yaw = 1.2#0.75
+            # tracking_goal_vel = 3.0 # for terrain
+            # delta_yaw = 1.2#0.75
 
             # tracking_ang_vel = 0.5
-            # lin_vel_z = -1.5#-1 for flat
-            lin_vel_z = -0.5 # for terrain
+            lin_vel_z = -1.5#-1 for flat
+            # lin_vel_z = -0.5 # for terrain
 
             lin_vel_x = 0
             lin_vel_y = 0
@@ -214,8 +216,8 @@ class LeggedRobotCfg(BaseConfig):
             
             # velocity_magnitude=0.5 # why is this here??
             #lin_vel_y= -2.0
-            # ang_vel_xy = -1.5#-0.05 for flat
-            ang_vel_xy = -0.05 # for terrain
+            ang_vel_xy = -1.5#-0.05 for flat
+            # ang_vel_xy = -0.05 # for terrain
 
             
             # orientation = -0.0 # for terrain
@@ -227,7 +229,7 @@ class LeggedRobotCfg(BaseConfig):
             base_height = -0.25
             # feet_air_time = 0.5#1.
             # feet_air_time = 0.75#1.
-            # feet_air_time = 0.5#1.
+            feet_air_time = 0.5#1.
 
 
             # three_feet_on_ground=0.3
@@ -240,7 +242,7 @@ class LeggedRobotCfg(BaseConfig):
             stand_still = -0.5
             rule_1 = 0.35
             # rule_2 = 0.25
-            # rule_3 = 0.2
+            rule_3 = 0.2
 
         only_positive_rewards = False # if true negative total rewards are clipped at zero (avoids early termination problems)
         tracking_sigma = 0.25 # tracking reward = exp(-error^2/sigma)
@@ -298,7 +300,7 @@ class LeggedRobotCfg(BaseConfig):
             rest_offset = 0.0   # [m]
             bounce_threshold_velocity = 0.5 #0.5 [m/s]
             max_depenetration_velocity = 1.0
-            max_gpu_contact_pairs = 2**24#2**23 #2**24 -> needed for 8000 envs and more
+            max_gpu_contact_pairs = 2**23#2**23 #2**24 -> needed for 8000 envs and more
             default_buffer_size_multiplier = 5
             contact_collection = 2 # 0: never, 1: last sub-step, 2: all sub-steps (default=2)
 
@@ -346,7 +348,7 @@ class LeggedRobotCfgPPO(BaseConfig):
         buffer_len = LeggedRobotCfg.depth.buffer_len
         hidden_dims = 512
         learning_rate = 1.e-3
-        num_steps_per_env = LeggedRobotCfg.depth.update_interval * 24
+        num_steps_per_env = LeggedRobotCfg.depth.update_interval * num_steps#LeggedRobotCfg.depth.update_interval * 24
 
 
     class estimator:
@@ -360,8 +362,8 @@ class LeggedRobotCfgPPO(BaseConfig):
     class runner:
         policy_class_name = 'ActorCritic'
         algorithm_class_name = 'PPO'
-        num_steps_per_env = 24 # per iteration
-        max_iterations = 5000# number of policy updates
+        num_steps_per_env = num_steps#24 # per iteration, changed to 48 because 
+        max_iterations = 20000# number of policy updates
 
         # logging
         save_interval = 50 # check for potential saves every this many iterations

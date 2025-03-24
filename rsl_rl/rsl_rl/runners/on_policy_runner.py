@@ -151,6 +151,12 @@ class OnPolicyRunner:
         #initialize writer
         if self.log_dir is not None and self.writer is None:
             self.writer = SummaryWriter(log_dir=self.log_dir, flush_secs=10)
+            config_files = [
+        "/home/loganzhang/Eigenbotrl/legged_gym/legged_gym/envs/base/legged_robot_config.py",
+        "/home/loganzhang/Eigenbotrl/legged_gym/legged_gym/envs/eigenbot/eigenbot_config.py"
+    ]
+        for file in config_files:
+             shutil.copy(file, os.path.join(self.log_dir, os.path.basename(file)))
         if init_at_random_ep_len:
             self.env.episode_length_buf = torch.randint_like(self.env.episode_length_buf, high=int(self.env.max_episode_length))
         obs = self.env.get_observations()
