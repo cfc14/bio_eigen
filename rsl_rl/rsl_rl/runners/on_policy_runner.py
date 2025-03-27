@@ -152,8 +152,8 @@ class OnPolicyRunner:
         if self.log_dir is not None and self.writer is None:
             self.writer = SummaryWriter(log_dir=self.log_dir, flush_secs=10)
             config_files = [
-        "/home/loganzhang/Eigenbotrl/legged_gym/legged_gym/envs/base/legged_robot_config.py",
-        "/home/loganzhang/Eigenbotrl/legged_gym/legged_gym/envs/eigenbot/eigenbot_config.py"
+        "../../../legged_gym/legged_gym/envs/base/legged_robot_config.py",
+        "../../../legged_gym/legged_gym/envs/eigenbot/eigenbot_config.py"
     ]
         for file in config_files:
              shutil.copy(file, os.path.join(self.log_dir, os.path.basename(file)))

@@ -425,7 +425,7 @@ class LeggedRobot(BaseTask):
         # import ipdb;ipdb.set_trace()
         not_flat_tensor = (torch.abs(torch.mean(self.measured_heights, dim=1))>0.05)[:,None]
         self.flat_tensor=~not_flat_tensor
-        obs_buf = torch.cat((  self.base_lin_vel * self.obs_scales.lin_vel,
+        obs_buf = torch.cat((  #self.base_lin_vel * self.obs_scales.lin_vel,
                                     self.base_ang_vel  * self.obs_scales.ang_vel,
                                     imu_obs,
                                     delta_yaw,
@@ -1009,7 +1009,7 @@ class LeggedRobot(BaseTask):
             [torch.Tensor]: Vector of scales used to multiply a uniform distribution in [-1, 1]
         """
         # obs_dim = 253  # This should match the size of each observation in obs_buf
-        obs_dim = 207
+        obs_dim = 204
         noise_vec = torch.zeros(obs_dim)  # Initialize with the correct size
         # self.obs_buf = torch.cat((  self.base_lin_vel * self.obs_scales.lin_vel,
         #                             self.base_ang_vel  * self.obs_scales.ang_vel,
@@ -1030,29 +1030,29 @@ class LeggedRobot(BaseTask):
         noise_scales = self.cfg.noise.noise_scales
         noise_level = self.cfg.noise.noise_level
 
-        noise_vec[:3] = noise_scales.lin_vel * noise_level * self.obs_scales.lin_vel
-        noise_vec[3:6] = noise_scales.ang_vel * noise_level * self.obs_scales.ang_vel
-        noise_vec[6:8] = noise_scales.orientation * noise_level
-        noise_vec[8:9] = 0
-        noise_vec[9:12] = noise_scales.gravity * noise_level
-        noise_vec[12:13] = 0.  # commands
-        noise_vec[13:31] = noise_scales.dof_pos * noise_level * self.obs_scales.dof_pos
-        noise_vec[31:49] = noise_scales.dof_vel * noise_level * self.obs_scales.dof_vel
+        # noise_vec[:3] = noise_scales.lin_vel * noise_level * self.obs_scales.lin_vel
+        noise_vec[:3] = noise_scales.ang_vel * noise_level * self.obs_scales.ang_vel
+        noise_vec[3:5] = noise_scales.orientation * noise_level
+        noise_vec[5:6] = 0
+        noise_vec[6:9] = noise_scales.gravity * noise_level
+        noise_vec[9:10] = 0.  # commands
+        noise_vec[10:28] = noise_scales.dof_pos * noise_level * self.obs_scales.dof_pos
+        noise_vec[28:46] = noise_scales.dof_vel * noise_level * self.obs_scales.dof_vel
 
-        noise_vec[49:50] = 0.  # flat tensor
-        noise_vec[50:51] = 0.  # non flat tensor
-        noise_vec[51:69] = 0.  # non flat tensor
+        noise_vec[46:47] = 0.  # flat tensor
+        noise_vec[47:48] = 0.  # non flat tensor
+        noise_vec[48:66] = 0.  # non flat tensor
 
 
-        noise_vec[69:75] = 0.  # contact filter
+        noise_vec[66:72] = 0.  # contact filter
 
         if self.cfg.terrain.measure_heights:
             # noise_vec[48:253] = noise_scales.height_measurements * noise_level * self.obs_scales.height_measurements
-            noise_vec[75:207] = noise_scales.height_measurements * noise_level * self.obs_scales.height_measurements
+            noise_vec[72:204] = noise_scales.height_measurements * noise_level * self.obs_scales.height_measurements
         else:
             # If terrain height measurements are not used, fill the rest with zeros
             #noise_vec[48:253] = 0.
-            noise_vec[75:207] = 0.
+            noise_vec[72:204] = 0.
 
             # Ensure that noise_vec has exactly 253 elements
         assert noise_vec.shape[0] == obs_dim, f"noise_vec has incorrect size: {noise_vec.shape[0]} != {obs_dim}"
@@ -1309,6 +1309,7 @@ class LeggedRobot(BaseTask):
             # create env instance
             env_handle = self.gym.create_env(self.sim, env_lower, env_upper, int(np.sqrt(self.num_envs)))
             pos = self.env_origins[i].clone()
+            # import ipdb;ipdb.set_trace()
             pos[:2] += torch_rand_float(-1., 1., (2,1), device=self.device).squeeze(1)
             start_pose.p = gymapi.Vec3(*pos)
                 
@@ -1749,7 +1750,7 @@ class LeggedRobot(BaseTask):
         """
         contact = self.contact_forces[:, self.feet_indices, 2] > self.cfg.rewards.contact_tresh
         contact_filt = torch.logical_or(contact, self.last_contacts)
-        self.last_contacts = contacts.clone()
+        self.last_contacts = contact.clone()
 
         middle_leg_contact = contact_filt[:, [1, 4]]
         front_leg_contact = contact_filt[:, [0, 3]]  # Front legs

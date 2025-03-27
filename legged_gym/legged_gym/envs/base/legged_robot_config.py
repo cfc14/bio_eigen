@@ -31,7 +31,7 @@
 from .base_config import BaseConfig
 import numpy as np
 
-num_steps = 36#48 # original 24, changed to 48 for 2048 envs
+num_steps = 24#48 # original 24, changed to 48 for 2048 envs
 
 class LeggedRobotCfg(BaseConfig):
     class env:
@@ -42,10 +42,11 @@ class LeggedRobotCfg(BaseConfig):
         n_scan = 132
         n_priv = 3+3 +3
         n_priv_latent = 4 + 1 + 18 +18
-        n_proprio = 3+3+2+1+3+1+18+18+1+1+18+6#3 + 2 + 3 + 4 + 36 + 5
+        n_proprio = 3+2+1+3+1+18+18+1+1+18+6#3 + 2 + 3 + 4 + 36 + 5
         history_len = 10
         #num_observations = 207
         num_observations = n_proprio + n_scan + history_len*n_proprio + n_priv_latent + n_priv #n_scan + n_proprio + n_priv #187 + 47 + 5 + 12 
+        # 72+
 
         num_privileged_obs = None # if not None a priviledge_obs_buf will be returned by step() (critic obs for assymetric training). None is returned otherwise 
         num_actions = 12
@@ -200,14 +201,14 @@ class LeggedRobotCfg(BaseConfig):
             termination = -1.0
             # tracking_lin_vel = 2.0
 
-            tracking_goal_vel = 2.5 # for flat
+            tracking_goal_vel = 3.5 # for flat
             delta_yaw = 2.0#0.75 # for flat
 
             # tracking_goal_vel = 3.0 # for terrain
             # delta_yaw = 1.2#0.75
 
             # tracking_ang_vel = 0.5
-            lin_vel_z = -1.5#-1 for flat
+            lin_vel_z = -2.5#-1 for flat
             # lin_vel_z = -0.5 # for terrain
 
             lin_vel_x = 0
@@ -216,7 +217,7 @@ class LeggedRobotCfg(BaseConfig):
             
             # velocity_magnitude=0.5 # why is this here??
             #lin_vel_y= -2.0
-            ang_vel_xy = -1.5#-0.05 for flat
+            ang_vel_xy = -2.0#-0.05 for flat
             # ang_vel_xy = -0.05 # for terrain
 
             
@@ -229,7 +230,7 @@ class LeggedRobotCfg(BaseConfig):
             base_height = -0.25
             # feet_air_time = 0.5#1.
             # feet_air_time = 0.75#1.
-            feet_air_time = 0.5#1.
+            feet_air_time = 0.7#1.
 
 
             # three_feet_on_ground=0.3
@@ -300,7 +301,7 @@ class LeggedRobotCfg(BaseConfig):
             rest_offset = 0.0   # [m]
             bounce_threshold_velocity = 0.5 #0.5 [m/s]
             max_depenetration_velocity = 1.0
-            max_gpu_contact_pairs = 2**23#2**23 #2**24 -> needed for 8000 envs and more
+            max_gpu_contact_pairs = 2**24#2**23 #2**24 -> needed for 8000 envs and more
             default_buffer_size_multiplier = 5
             contact_collection = 2 # 0: never, 1: last sub-step, 2: all sub-steps (default=2)
 
