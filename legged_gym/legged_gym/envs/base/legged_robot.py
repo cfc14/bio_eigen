@@ -99,6 +99,8 @@ class LeggedRobot(BaseTask):
         self.init_done = False
         self.contact_flag = torch.zeros(6)
         self.flat_tensor = None
+        self.global_counter = 0
+        self.total_env_steps_counter = 0
 
         self.resize_transform = torchvision.transforms.Resize((self.cfg.depth.resized[1], self.cfg.depth.resized[0]), 
                                                               interpolation=torchvision.transforms.InterpolationMode.BICUBIC)
@@ -213,6 +215,7 @@ class LeggedRobot(BaseTask):
         # return clipped obs, clipped states (None), rewards, dones and infos
         clip_obs = self.cfg.normalization.clip_observations
         self.obs_buf = torch.clip(self.obs_buf, -clip_obs, clip_obs)
+        self.extras["delta_yaw_ok"] = self.delta_yaw < 2
         if self.privileged_obs_buf is not None:
             self.privileged_obs_buf = torch.clip(self.privileged_obs_buf, -clip_obs, clip_obs)
         if self.cfg.depth.use_camera and self.global_counter % self.cfg.depth.update_interval == 0:
@@ -406,7 +409,7 @@ class LeggedRobot(BaseTask):
 
         current_heading = wrap_to_pi(self.compute_yaw())
         commanded_heading = self.commands[ :, 3]
-        delta_yaw = wrap_to_pi((commanded_heading - current_heading)[:,None])
+        self.delta_yaw = wrap_to_pi((commanded_heading - current_heading)[:,None])
         # self.flat=1
 
         # flat_tensor = (torch.ones(self.num_envs, device=self.device, requires_grad=False) * self.flat)[:,None]
@@ -428,7 +431,7 @@ class LeggedRobot(BaseTask):
         obs_buf = torch.cat((  #self.base_lin_vel * self.obs_scales.lin_vel,
                                     self.base_ang_vel  * self.obs_scales.ang_vel,
                                     imu_obs,
-                                    delta_yaw,
+                                    self.delta_yaw,
                                     self.projected_gravity,
                                     self.commands[:, 0:1] * self.commands_scale,
                                     # self.commands[:, :3] * self.commands_scale,
@@ -493,6 +496,8 @@ class LeggedRobot(BaseTask):
         """ Creates simulation, terrain and evironments
         """
         self.up_axis_idx = 2 # 2 for z, 1 for y -> adapt gravity accordingly
+        if self.cfg.depth.use_camera:
+            self.graphics_device_id = self.sim_device_id  # required in headless mode
         self.sim = self.gym.create_sim(self.sim_device_id, self.graphics_device_id, self.physics_engine, self.sim_params)
         mesh_type = self.cfg.terrain.mesh_type
         if mesh_type in ['heightfield', 'trimesh']:
@@ -1222,29 +1227,30 @@ class LeggedRobot(BaseTask):
         tm_params.restitution = self.cfg.terrain.restitution
         self.gym.add_triangle_mesh(self.sim, self.terrain.vertices.flatten(order='C'), self.terrain.triangles.flatten(order='C'), tm_params)   
         self.height_samples = torch.tensor(self.terrain.heightsamples).view(self.terrain.tot_rows, self.terrain.tot_cols).to(self.device)
-    # def attach_camera(self, i, env_handle, actor_handle):
-    #     if self.cfg.depth.use_camera:
-    #         config = self.cfg.depth
-    #         camera_props = gymapi.CameraProperties()
-    #         camera_props.width = self.cfg.depth.original[0]
-    #         camera_props.height = self.cfg.depth.original[1]
-    #         camera_props.enable_tensors = True
-    #         camera_horizontal_fov = self.cfg.depth.horizontal_fov 
-    #         camera_props.horizontal_fov = camera_horizontal_fov
+    def attach_camera(self, i, env_handle, actor_handle):
+        if self.cfg.depth.use_camera:
+            config = self.cfg.depth
+            camera_props = gymapi.CameraProperties()
+            camera_props.width = self.cfg.depth.original[0]
+            camera_props.height = self.cfg.depth.original[1]
+            camera_props.enable_tensors = True
+            camera_horizontal_fov = self.cfg.depth.horizontal_fov 
+            camera_props.horizontal_fov = camera_horizontal_fov
 
-    #         camera_handle = self.gym.create_camera_sensor(env_handle, camera_props)
-    #         self.cam_handles.append(camera_handle)
+            camera_handle = self.gym.create_camera_sensor(env_handle, camera_props)
+            # import ipdb; ipdb.set_trace()
+            self.cam_handles.append(camera_handle)
             
-    #         local_transform = gymapi.Transform()
+            local_transform = gymapi.Transform()
             
-    #         camera_position = np.copy(config.position)
-    #         camera_angle = np.random.uniform(config.angle[0], config.angle[1])
+            camera_position = np.copy(config.position)
+            camera_angle = np.random.uniform(config.angle[0], config.angle[1])
             
-    #         local_transform.p = gymapi.Vec3(*camera_position)
-    #         local_transform.r = gymapi.Quat.from_euler_zyx(0, np.radians(camera_angle), 0)
-    #         root_handle = self.gym.get_actor_root_rigid_body_handle(env_handle, actor_handle)
+            local_transform.p = gymapi.Vec3(*camera_position)
+            local_transform.r = gymapi.Quat.from_euler_zyx(0, np.radians(camera_angle), 0)
+            root_handle = self.gym.get_actor_root_rigid_body_handle(env_handle, actor_handle)
             
-    #         self.gym.attach_camera_to_body(camera_handle, env_handle, root_handle, local_transform, gymapi.FOLLOW_TRANSFORM)
+            self.gym.attach_camera_to_body(camera_handle, env_handle, root_handle, local_transform, gymapi.FOLLOW_TRANSFORM)
 
     def _create_envs(self):
         """ Creates environments:
@@ -1304,6 +1310,8 @@ class LeggedRobot(BaseTask):
         env_upper = gymapi.Vec3(0., 0., 0.)
         self.actor_handles = []
         self.envs = []
+        self.cam_handles = []
+        self.cam_tensors = []
         self.mass_params_tensor = torch.zeros(self.num_envs, 4, dtype=torch.float, device=self.device, requires_grad=False)
         for i in range(self.num_envs):
             # create env instance
@@ -1324,6 +1332,8 @@ class LeggedRobot(BaseTask):
             self.envs.append(env_handle)
             self.actor_handles.append(actor_handle)
             self.mass_params_tensor[i, :] = torch.from_numpy(mass_params).to(self.device).to(torch.float)
+            self.attach_camera(i, env_handle, actor_handle)
+
 
 
         self.feet_indices = torch.zeros(len(feet_names), dtype=torch.long, device=self.device, requires_grad=False)

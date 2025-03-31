@@ -174,6 +174,10 @@ def get_args():
         {"name": "--max_iterations", "type": int, "help": "Maximum number of training iterations. Overrides config file if provided."},
         {"name": "--show_heading", "action": "store_true", "default": False, "help": "visualize heading"},
         {"name": "--rough_terrain", "action": "store_true", "default": False, "help": "whether it is on rough terrain"},
+        {"name": "--debug", "action": "store_true", "default": False, "help": "Disable wandb logging"},
+        {"name": "--no_wandb", "action": "store_true", "default": False, "help": "no wandb"},
+        
+
 
 
     ]

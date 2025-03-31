@@ -86,6 +86,34 @@ def play(args):
     img_idx = 0
 
     for i in range(10*int(env.max_episode_length)):
+        if args.use_jit:
+            if env.cfg.depth.use_camera:
+                if infos["depth"] is not None:
+                    depth_latent = torch.ones((env_cfg.env.num_envs, 32), device=env.device)
+                    actions, depth_latent = policy_jit(obs.detach(), True, infos["depth"], depth_latent)
+                else:
+                    depth_buffer = torch.ones((env_cfg.env.num_envs, 58, 87), device=env.device)
+                    actions, depth_latent = policy_jit(obs.detach(), False, depth_buffer, depth_latent)
+            else:
+                obs_jit = torch.cat((obs.detach()[:, :env_cfg.env.n_proprio+env_cfg.env.n_priv], obs.detach()[:, -env_cfg.env.history_len*env_cfg.env.n_proprio:]), dim=1)
+                actions = policy(obs_jit)
+        else:
+            if env.cfg.depth.use_camera:
+                if infos["depth"] is not None:
+                    obs_student = obs[:, :env.cfg.env.n_proprio].clone()
+                    obs_student[:, 6:8] = 0
+                    depth_latent_and_yaw = depth_encoder(infos["depth"], obs_student)
+                    depth_latent = depth_latent_and_yaw[:, :-2]
+                    yaw = depth_latent_and_yaw[:, -2:]
+                obs[:, 6:8] = 1.5*yaw
+                    
+            else:
+                depth_latent = None
+            
+            if hasattr(ppo_runner.alg, "depth_actor"):
+                actions = ppo_runner.alg.depth_actor(obs.detach(), hist_encoding=True, scandots_latent=depth_latent)
+            else:
+                actions = policy(obs.detach(), hist_encoding=True, scandots_latent=depth_latent)
         actions = policy(obs.detach())
         obs, _, rews, dones, infos = env.step(actions.detach())
         if RECORD_FRAMES:
