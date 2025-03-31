@@ -98,7 +98,7 @@ class LeggedRobot(BaseTask):
         self.debug_viz = False
         self.init_done = False
         self.contact_flag = torch.zeros(6)
-        self.flat_tensor = None
+        self.flat_tensor = torch.ones(self.cfg.env.num_envs, dtype=torch.bool, device=sim_device)[:,None]
 
         self.resize_transform = torchvision.transforms.Resize((self.cfg.depth.resized[1], self.cfg.depth.resized[0]), 
                                                               interpolation=torchvision.transforms.InterpolationMode.BICUBIC)
@@ -389,6 +389,7 @@ class LeggedRobot(BaseTask):
         for i in range(len(self.reward_functions)):
             name = self.reward_names[i]
             rew = self.reward_functions[i]() * self.reward_scales[name]
+
             self.rew_buf += rew
             self.episode_sums[name] += rew
         if self.cfg.rewards.only_positive_rewards:
@@ -1473,7 +1474,10 @@ class LeggedRobot(BaseTask):
     #------------ reward functions----------------
     def _reward_lin_vel_z(self):
         # Penalize z axis base linear velocity
-        return torch.square(self.base_lin_vel[:, 2])
+
+        reward = torch.square(self.base_lin_vel[:, 2])
+        reward[self.flat_tensor.squeeze()!=0] *= 5
+        return reward
     def _reward_lin_vel_x(self):
         # Penalize z axis base linear velocity
         return torch.square(self.base_lin_vel[:, 0])
@@ -1532,10 +1536,13 @@ class LeggedRobot(BaseTask):
     
     def _reward_ang_vel_xy(self):
         # Penalize xy axes base angular velocity
-        return torch.sum(torch.square(self.base_ang_vel[:, :2]), dim=1)
+        reward = torch.sum(torch.square(self.base_ang_vel[:, :2]), dim=1)
+        reward[self.flat_tensor.squeeze()!=0] *= 40
+        return reward
     def _reward_delta_yaw(self):
         # Penalize high delta_yaw values
         rew = torch.exp(-torch.abs(wrap_to_pi(self.commands[:, 3] - self.compute_yaw())))
+        rew[self.flat_tensor.squeeze()!=0] *= 1.6
         return rew
 
     
@@ -1544,12 +1551,16 @@ class LeggedRobot(BaseTask):
         # import ipdb;ipdb.set_trace()
         if self.flat_tensor == None:
             self.flat_tensor = torch.ones(self.cfg.env.num_envs, dtype=torch.bool, device=self.device)[:,None]
-        return torch.sum(torch.square(self.projected_gravity[:, :2]*self.flat_tensor), dim=1)
+        reward = torch.sum(torch.square(self.projected_gravity[:, :2]), dim=1)
+        reward[self.flat_tensor.squeeze()!=0] *= 0
+        return reward
 
     def _reward_base_height(self):
         # Penalize base height away from target
         base_height = torch.mean(self.root_states[:, 2].unsqueeze(1) - self.measured_heights, dim=1)
-        return torch.square(base_height - self.cfg.rewards.base_height_target)
+        reward = torch.square(base_height - self.cfg.rewards.base_height_target)
+        reward[self.flat_tensor.squeeze()!=0] *= 0.0
+        return reward
     
     def _reward_torques(self):
         # Penalize torques
@@ -1606,8 +1617,9 @@ class LeggedRobot(BaseTask):
         vel_rel_heading = torch.sum(target_vec_norm * cur_vel, dim=-1)
         # import ipdb;ipdb.set_trace()
         lin_vel_error = torch.square(vel_rel_heading - self.commands[:, 0])
-        return torch.exp(-lin_vel_error/self.cfg.rewards.tracking_sigma)
-        # return rew
+        reward = torch.exp(-lin_vel_error/self.cfg.rewards.tracking_sigma)
+        reward[self.flat_tensor.squeeze()!=0] /= 1.6
+        return reward
     
     def _reward_tracking_ang_vel(self):
         # Tracking of angular velocity commands (yaw) 
@@ -1789,10 +1801,13 @@ class LeggedRobot(BaseTask):
         hind_up = ~hind_leg_contact  # Either front or hind lifted
         rule_1_b = torch.any(hind_up & middle_leg_contact, dim=1)
         # rule_1_c = torch.any(hind_up & middle_leg_contact, dim=1)
+        # rule 1 to hind leg them selves
+        rule_1_c = torch.any(hind_up[:, [1,0]] & hind_leg_contact[:, [1,0]], dim=1)
+
 
 
         # Total reward
-        rule_1_reward = rule_1_a.float() + rule_1_b.float()
+        rule_1_reward = rule_1_a.float() + rule_1_b.float() + rule_1_c.float()/2.0
         return rule_1_reward
 
 
@@ -1879,6 +1894,6 @@ class LeggedRobot(BaseTask):
 
         # # Apply reward only when moving
         # rule_3_reward *= torch.norm(self.commands[:, :2], dim=1) > 0.1  # No reward if stationary
-
+        rule_3_reward[self.flat_tensor.squeeze()!=0] *= 2
         return rule_3_reward
 

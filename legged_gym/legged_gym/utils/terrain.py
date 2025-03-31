@@ -77,7 +77,7 @@ class Terrain:
             # Env coordinates in the world
             (i, j) = np.unravel_index(k, (self.cfg.num_rows, self.cfg.num_cols))
 
-            choice = np.random.uniform(0, 1)
+            choice = np.random.uniform(0, 1*self.cfg.terrain_max_multiplier)
             
             #
             difficulty = np.random.choice([0.0,0.1,self.cfg.terrain_max_multiplier])
@@ -96,10 +96,11 @@ class Terrain:
                 # import ipdb;ipdb.set_trace()
                 difficulty = i / self.cfg.num_rows*multiplier
                 choice = j / self.cfg.num_cols*multiplier
-
                 terrain = self.make_terrain(choice, difficulty)
                 self.add_terrain_to_map(terrain, i, j)
-
+        
+            
+        # Rough-buildon-encoders-flat-baseline-GPU_contact_24-rule3_low-nobase_height-highveltrack-lowhead-all_terrain
     def selected_terrain(self):
         terrain_type = self.cfg.terrain_kwargs.pop('type')
         for k in range(self.cfg.num_sub_terrains):
@@ -140,13 +141,23 @@ class Terrain:
                 step_height *= -1
             terrain_utils.pyramid_stairs_terrain(terrain, step_width=0.31, step_height=step_height, platform_size=3.)
         elif choice < self.proportions[4]:
+
             num_rectangles = 20
             rectangle_min_size = 1.
             rectangle_max_size = 2.
+            # import ipdb;ipdb.set_trace()
             terrain_utils.discrete_obstacles_terrain(terrain, discrete_obstacles_height, rectangle_min_size, rectangle_max_size, num_rectangles, platform_size=3.)
         elif choice < self.proportions[5]:
-            terrain_utils.stepping_stones_terrain(terrain, stone_size=stepping_stones_size, stone_distance=stone_distance, max_height=0., platform_size=4.)
+            num_rectangles = 20
+            rectangle_min_size = 1.
+            rectangle_max_size = 2.
+            # import ipdb;ipdb.set_trace()
+            terrain_utils.discrete_obstacles_terrain(terrain, 0, rectangle_min_size, rectangle_max_size, num_rectangles, platform_size=3.)
         elif choice < self.proportions[6]:
+            # import ipdb;ipdb.set_trace()
+
+            terrain_utils.stepping_stones_terrain(terrain, stone_size=stepping_stones_size, stone_distance=stone_distance, max_height=0., platform_size=4.)
+        elif choice < self.proportions[7]:
             gap_terrain(terrain, gap_size=gap_size, platform_size=3.)
         else:
             pit_terrain(terrain, depth=pit_depth, platform_size=4.)

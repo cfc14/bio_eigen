@@ -104,13 +104,16 @@ class LeggedRobotCfg(BaseConfig):
         terrain_length = 8.
         terrain_width = 8.
         num_rows= 10 # number of terrain rows (levels)
-        num_cols = 20 # number of terrain cols (types)
-        # terrain types: [smooth slope, rough slope, stairs up, stairs down, discrete]
-        terrain_proportions = [0.1, 0.1, 0.35, 0.25, 0.2]
+        num_cols = 24 # number of terrain cols (types)
+        # terrain types: [smooth slope, rough slope, stairs up, stairs down, discrete, flat]
+        terrain_max_multiplier = 0.2# 0.1 for easy
+
+        terrain_proportions = [0.1*terrain_max_multiplier, 0.1*terrain_max_multiplier, 
+                               0.3*terrain_max_multiplier, 0.2*terrain_max_multiplier, 
+                               0.2*terrain_max_multiplier, 0.1*terrain_max_multiplier]
         # trimesh only:
         slope_treshold = 0.75 # slopes above this threshold will be corrected to vertical surfaces
         rough_flat = False
-        terrain_max_multiplier = 0.2# 0.1 for easy
         flat_terrain_flag = True
 
 
@@ -201,15 +204,15 @@ class LeggedRobotCfg(BaseConfig):
             termination = -1.0
             # tracking_lin_vel = 2.0
 
-            tracking_goal_vel = 3.5 # for flat
-            delta_yaw = 2.0#0.75 # for flat
+            tracking_goal_vel = 4 # for flat
+            delta_yaw = 1.2#0.75 # for flat
 
             # tracking_goal_vel = 3.0 # for terrain
             # delta_yaw = 1.2#0.75
 
             # tracking_ang_vel = 0.5
-            lin_vel_z = -2.5#-1 for flat
-            # lin_vel_z = -0.5 # for terrain
+            # lin_vel_z = -2.5#-1 for flat
+            lin_vel_z = -0.5 # for terrain
 
             lin_vel_x = 0
             lin_vel_y = 0
@@ -217,17 +220,17 @@ class LeggedRobotCfg(BaseConfig):
             
             # velocity_magnitude=0.5 # why is this here??
             #lin_vel_y= -2.0
-            ang_vel_xy = -2.0#-0.05 for flat
-            # ang_vel_xy = -0.05 # for terrain
+            # ang_vel_xy = -2.0#-0.05 for flat
+            ang_vel_xy = -0.05 # for terrain
 
             
-            # orientation = -0.0 # for terrain
-            orientation = -1.0 # for flat
+            orientation = -1.0 # for terrain
+            # orientation = -1.0 # for flat
 
             torques = -0.00001
             dof_vel = 0#2.5e-5
             dof_acc = -2.5e-7
-            base_height = -0.25
+            # base_height = -0.25
             # feet_air_time = 0.5#1.
             # feet_air_time = 0.75#1.
             feet_air_time = 0.7#1.
@@ -243,7 +246,7 @@ class LeggedRobotCfg(BaseConfig):
             stand_still = -0.5
             rule_1 = 0.35
             # rule_2 = 0.25
-            rule_3 = 0.2
+            rule_3 = 0.1
 
         only_positive_rewards = False # if true negative total rewards are clipped at zero (avoids early termination problems)
         tracking_sigma = 0.25 # tracking reward = exp(-error^2/sigma)
