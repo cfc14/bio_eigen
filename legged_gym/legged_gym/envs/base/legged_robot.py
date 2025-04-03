@@ -1010,7 +1010,7 @@ class LeggedRobot(BaseTask):
             [torch.Tensor]: Vector of scales used to multiply a uniform distribution in [-1, 1]
         """
         # obs_dim = 253  # This should match the size of each observation in obs_buf
-        obs_dim = 204
+        obs_dim = 259
         noise_vec = torch.zeros(obs_dim)  # Initialize with the correct size
         # self.obs_buf = torch.cat((  self.base_lin_vel * self.obs_scales.lin_vel,
         #                             self.base_ang_vel  * self.obs_scales.ang_vel,
@@ -1049,11 +1049,11 @@ class LeggedRobot(BaseTask):
 
         if self.cfg.terrain.measure_heights:
             # noise_vec[48:253] = noise_scales.height_measurements * noise_level * self.obs_scales.height_measurements
-            noise_vec[72:204] = noise_scales.height_measurements * noise_level * self.obs_scales.height_measurements
+            noise_vec[72:obs_dim] = noise_scales.height_measurements * noise_level * self.obs_scales.height_measurements
         else:
             # If terrain height measurements are not used, fill the rest with zeros
             #noise_vec[48:253] = 0.
-            noise_vec[72:204] = 0.
+            noise_vec[72:obs_dim] = 0.
 
             # Ensure that noise_vec has exactly 253 elements
         assert noise_vec.shape[0] == obs_dim, f"noise_vec has incorrect size: {noise_vec.shape[0]} != {obs_dim}"
@@ -1476,7 +1476,7 @@ class LeggedRobot(BaseTask):
         # Penalize z axis base linear velocity
 
         reward = torch.square(self.base_lin_vel[:, 2])
-        reward[self.flat_tensor.squeeze()!=0] *= 5
+        reward[self.flat_tensor.squeeze()!=0] *= 2.5
         return reward
     def _reward_lin_vel_x(self):
         # Penalize z axis base linear velocity
@@ -1720,8 +1720,9 @@ class LeggedRobot(BaseTask):
     
     def _reward_stumble(self):
         # Penalize feet hitting vertical surfaces
-        return torch.any(torch.norm(self.contact_forces[:, self.feet_indices, :2], dim=2) >\
-             5 *torch.abs(self.contact_forces[:, self.feet_indices, 2]), dim=1)
+        rew = torch.any(torch.norm(self.contact_forces[:, self.feet_indices, :2], dim=2) >\
+             self.cfg.rewards.stumble_tresh *torch.abs(self.contact_forces[:, self.feet_indices, 2]), dim=1)
+        return rew.float()
         
     def _reward_stand_still(self):
         # Penalize motion at zero commands

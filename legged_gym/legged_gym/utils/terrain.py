@@ -77,7 +77,7 @@ class Terrain:
             # Env coordinates in the world
             (i, j) = np.unravel_index(k, (self.cfg.num_rows, self.cfg.num_cols))
 
-            choice = np.random.uniform(0, 1*self.cfg.terrain_max_multiplier)
+            choice = np.random.uniform(0, 0.2)
             
             #
             difficulty = np.random.choice([0.0,0.1,self.cfg.terrain_max_multiplier])
@@ -88,6 +88,7 @@ class Terrain:
             self.add_terrain_to_map(terrain, i, j)
         
     def curiculum(self):
+        # all_terrain = []
         for j in range(self.cfg.num_cols):
             for i in range(self.cfg.num_rows):
                 multiplier = 0.0
@@ -98,6 +99,8 @@ class Terrain:
                 choice = j / self.cfg.num_cols*multiplier
                 terrain = self.make_terrain(choice, difficulty)
                 self.add_terrain_to_map(terrain, i, j)
+            # all_terrain.append(choice)
+        # import ipdb;ipdb.set_trace()
         
             
         # Rough-buildon-encoders-flat-baseline-GPU_contact_24-rule3_low-nobase_height-highveltrack-lowhead-all_terrain

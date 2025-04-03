@@ -39,7 +39,7 @@ class LeggedRobotCfg(BaseConfig):
         # num_observations = 253
         # num_observations = 258
         n_history = 10
-        n_scan = 132
+        n_scan = 187
         n_priv = 3+3 +3
         n_priv_latent = 4 + 1 + 18 +18
         n_proprio = 3+2+1+3+1+18+18+1+1+18+6#3 + 2 + 3 + 4 + 36 + 5
@@ -52,7 +52,7 @@ class LeggedRobotCfg(BaseConfig):
         num_actions = 12
         env_spacing = 3.  # not used with heightfields/trimeshes 
         send_timeouts = True # send time out information to the algorithm
-        episode_length_s = 20 # episode length in seconds
+        episode_length_s = 25 # episode length in seconds
 
         history_encoding = True
         # action_delay_range = [0, 5]
@@ -93,10 +93,10 @@ class LeggedRobotCfg(BaseConfig):
         restitution = 0.
         # rough terrain only:
         measure_heights = True
-        # measured_points_x = [-0.8, -0.7, -0.6, -0.5, -0.4, -0.3, -0.2, -0.1, 0., 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8] # 1mx1.6m rectangle (without center line)
-        # measured_points_y = [-0.5, -0.4, -0.3, -0.2, -0.1, 0., 0.1, 0.2, 0.3, 0.4, 0.5]
-        measured_points_x = [-0.45, -0.3, -0.15, 0, 0.15, 0.3, 0.45, 0.6, 0.75, 0.9, 1.05, 1.2] # 1mx1.6m rectangle (without center line)
-        measured_points_y = [-0.75, -0.6, -0.45, -0.3, -0.15, 0., 0.15, 0.3, 0.45, 0.6, 0.75]
+        measured_points_x = [-0.8, -0.7, -0.6, -0.5, -0.4, -0.3, -0.2, -0.1, 0., 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8] # 1mx1.6m rectangle (without center line)
+        measured_points_y = [-0.5, -0.4, -0.3, -0.2, -0.1, 0., 0.1, 0.2, 0.3, 0.4, 0.5]
+        # measured_points_x = [-0.45, -0.3, -0.15, 0, 0.15, 0.3, 0.45, 0.6, 0.75, 0.9, 1.05, 1.2] # 1mx1.6m rectangle (without center line)
+        # measured_points_y = [-0.75, -0.6, -0.45, -0.3, -0.15, 0., 0.15, 0.3, 0.45, 0.6, 0.75]
         measure_horizontal_noise = 0
         selected = False # select a unique terrain type and pass all arguments
         terrain_kwargs = None # Dict of arguments for selected terrain
@@ -104,13 +104,19 @@ class LeggedRobotCfg(BaseConfig):
         terrain_length = 8.
         terrain_width = 8.
         num_rows= 10 # number of terrain rows (levels)
-        num_cols = 24 # number of terrain cols (types)
         # terrain types: [smooth slope, rough slope, stairs up, stairs down, discrete, flat]
-        terrain_max_multiplier = 0.2# 0.1 for easy
+        terrain_max_multiplier = 0.3# 0.1 for easy
 
-        terrain_proportions = [0.1*terrain_max_multiplier, 0.1*terrain_max_multiplier, 
-                               0.3*terrain_max_multiplier, 0.2*terrain_max_multiplier, 
-                               0.2*terrain_max_multiplier, 0.1*terrain_max_multiplier]
+        # terrain_proportions = [0.1*terrain_max_multiplier, 0.1*terrain_max_multiplier, 
+        #                        0.3*terrain_max_multiplier, 0.2*terrain_max_multiplier, 
+        #                        0.2*terrain_max_multiplier, 0.1*terrain_max_multiplier]
+
+        terrain_proportions = [ 0.0, 0.0,
+                               0.35*terrain_max_multiplier, 0.25*terrain_max_multiplier, 
+                               0.25*terrain_max_multiplier, 0.15*terrain_max_multiplier]
+
+        num_cols = 4*len(terrain_proportions) # number of terrain cols (types)
+
         # trimesh only:
         slope_treshold = 0.75 # slopes above this threshold will be corrected to vertical surfaces
         rough_flat = False
@@ -212,7 +218,7 @@ class LeggedRobotCfg(BaseConfig):
 
             # tracking_ang_vel = 0.5
             # lin_vel_z = -2.5#-1 for flat
-            lin_vel_z = -0.5 # for terrain
+            lin_vel_z = -1 # for terrain
 
             lin_vel_x = 0
             lin_vel_y = 0
@@ -259,6 +265,7 @@ class LeggedRobotCfg(BaseConfig):
         torque_limit_hard = 4
         contact_tresh = 0.5
         exp_coeff_rule3 = -10
+        stumble_tresh = 2.5
 
     class normalization:
         class obs_scales:
