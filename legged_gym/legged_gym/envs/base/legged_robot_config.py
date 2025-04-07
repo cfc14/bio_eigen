@@ -39,7 +39,7 @@ class LeggedRobotCfg(BaseConfig):
         # num_observations = 253
         # num_observations = 258
         n_history = 10
-        n_scan = 187
+        n_scan = 132#187
         n_priv = 3+3 +3
         n_priv_latent = 4 + 1 + 18 +18
         n_proprio = 3+2+1+3+1+18+18+1+1+18+6#3 + 2 + 3 + 4 + 36 + 5
@@ -93,10 +93,10 @@ class LeggedRobotCfg(BaseConfig):
         restitution = 0.
         # rough terrain only:
         measure_heights = True
-        measured_points_x = [-0.8, -0.7, -0.6, -0.5, -0.4, -0.3, -0.2, -0.1, 0., 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8] # 1mx1.6m rectangle (without center line)
-        measured_points_y = [-0.5, -0.4, -0.3, -0.2, -0.1, 0., 0.1, 0.2, 0.3, 0.4, 0.5]
-        # measured_points_x = [-0.45, -0.3, -0.15, 0, 0.15, 0.3, 0.45, 0.6, 0.75, 0.9, 1.05, 1.2] # 1mx1.6m rectangle (without center line)
-        # measured_points_y = [-0.75, -0.6, -0.45, -0.3, -0.15, 0., 0.15, 0.3, 0.45, 0.6, 0.75]
+        # measured_points_x = [-0.8, -0.7, -0.6, -0.5, -0.4, -0.3, -0.2, -0.1, 0., 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8] # 1mx1.6m rectangle (without center line)
+        # measured_points_y = [-0.5, -0.4, -0.3, -0.2, -0.1, 0., 0.1, 0.2, 0.3, 0.4, 0.5]
+        measured_points_x = [-0.45, -0.3, -0.15, 0, 0.15, 0.3, 0.45, 0.6, 0.75, 0.9, 1.05, 1.2] # 1mx1.6m rectangle (without center line)
+        measured_points_y = [-0.75, -0.6, -0.45, -0.3, -0.15, 0., 0.15, 0.3, 0.45, 0.6, 0.75]
         measure_horizontal_noise = 0
         selected = False # select a unique terrain type and pass all arguments
         terrain_kwargs = None # Dict of arguments for selected terrain
@@ -220,8 +220,8 @@ class LeggedRobotCfg(BaseConfig):
             # lin_vel_z = -2.5#-1 for flat
             lin_vel_z = -1 # for terrain
 
-            lin_vel_x = 0
-            lin_vel_y = 0
+            # lin_vel_x = -2.0
+            # lin_vel_y = -0.05
             # lin_vel_heading= 2.
             
             # velocity_magnitude=0.5 # why is this here??
@@ -239,7 +239,7 @@ class LeggedRobotCfg(BaseConfig):
             # base_height = -0.25
             # feet_air_time = 0.5#1.
             # feet_air_time = 0.75#1.
-            feet_air_time = 0.7#1.
+            feet_air_time = 0.87#1.
 
 
             # three_feet_on_ground=0.3
@@ -247,11 +247,11 @@ class LeggedRobotCfg(BaseConfig):
             #no_leg_hovering=-0.3
             collision = -1.
             #balanced_leg_contact=0.2
-            stumble = -1.0#-0.5
+            stumble = -1.5#-0.5
             action_rate = -0.01
             stand_still = -0.5
             rule_1 = 0.35
-            # rule_2 = 0.25
+            # # rule_2 = 0.25
             rule_3 = 0.1
 
         only_positive_rewards = False # if true negative total rewards are clipped at zero (avoids early termination problems)
@@ -321,12 +321,12 @@ class LeggedRobotCfgPPO(BaseConfig):
     class policy:
         init_noise_std = 1.0
         #Scan rncoder
-        scan_encoder_dims = [128, 64, 32]
-        priv_encoder_dims = [64, 20]
+        scan_encoder_dims = [256, 128, 32] #[128, 128, 32]
+        priv_encoder_dims = [128, 20]#[64, 20]
 
         actor_hidden_dims = [512, 256, 128]
         critic_hidden_dims = [512, 256, 128]
-        priv_encoder_dims = [64, 20]
+        # priv_encoder_dims = [64, 20]
         activation = 'elu' # can be elu, relu, selu, crelu, lrelu, tanh, sigmoid
         # only for 'ActorCriticRecurrent':
         # rnn_type = 'lstm'

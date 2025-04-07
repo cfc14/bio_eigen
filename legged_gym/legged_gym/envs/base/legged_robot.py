@@ -1009,8 +1009,8 @@ class LeggedRobot(BaseTask):
         Returns:
             [torch.Tensor]: Vector of scales used to multiply a uniform distribution in [-1, 1]
         """
-        # obs_dim = 253  # This should match the size of each observation in obs_buf
-        obs_dim = 259
+        obs_dim = 253  # This should match the size of each observation in obs_buf
+        # obs_dim = 259
         noise_vec = torch.zeros(obs_dim)  # Initialize with the correct size
         # self.obs_buf = torch.cat((  self.base_lin_vel * self.obs_scales.lin_vel,
         #                             self.base_ang_vel  * self.obs_scales.ang_vel,
@@ -1480,10 +1480,15 @@ class LeggedRobot(BaseTask):
         return reward
     def _reward_lin_vel_x(self):
         # Penalize z axis base linear velocity
-        return torch.square(self.base_lin_vel[:, 0])
+        reward = torch.square(self.base_lin_vel[:, 0])
+        # reward[self.flat_tensor.squeeze()!=0] *= 40
+        return reward
+        # return torch.square(self.base_lin_vel[:, 0])
     def _reward_lin_vel_y(self):
         # Penalize z axis base linear velocity
-        return torch.square(self.base_lin_vel[:, 1])
+        reward = torch.square(self.base_lin_vel[:, 1])
+        reward[self.flat_tensor.squeeze()!=0] *= 40
+        return reward
     
     # def _reward_lin_vel_y(self):
     #     # Penalize z axis base linear velocity
