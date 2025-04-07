@@ -32,6 +32,7 @@ class RecurrentDepthBackbone(nn.Module):
         depth_image = self.base_backbone(depth_image)
         depth_latent = self.combination_mlp(torch.cat((depth_image, proprioception), dim=-1))
         # depth_latent = self.base_backbone(depth_image)
+        # import ipdb;ipdb.set_trace()
         depth_latent, self.hidden_states = self.rnn(depth_latent[:, None, :], self.hidden_states)
         depth_latent = self.output_mlp(depth_latent.squeeze(1))
         

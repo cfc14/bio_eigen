@@ -60,7 +60,7 @@ class LeggedRobotCfg(BaseConfig):
 
 
     class depth:
-        use_camera = False
+        use_camera = True
         camera_num_envs = 192
         camera_terrain_num_rows = 10
         camera_terrain_num_cols = 20
@@ -333,6 +333,39 @@ class LeggedRobotCfgPPO(BaseConfig):
         # rnn_hidden_size = 512
         # rnn_num_layers = 1
         tanh_encoder_output = False
+    class distil:
+        num_episodes = 10000
+        num_epochs = 10000
+        num_teacher_obs = 235 - 12 - 24 - 3
+        logging_interval = 5
+        save_interval = 1000  
+        epoch_save_interval = 10
+        batch_size = 1024
+        num_steps = 100
+        num_training_iters = 10
+        lr = 1e-3
+        training_device = "cuda:0"
+        max_buffer_length = 1000000
+        num_warmup_steps = 100
+    class teacher_policy:
+        init_noise_std = 1.0
+        actor_hidden_dims = [512, 256, 128]
+        critic_hidden_dims = [512, 256, 128]
+        activation = 'elu' # can be elu, relu, selu, crelu, lrelu, tanh, sigmoid
+        use_depth_backbone = False
+        backbone_type = "deepgait_coordconv"
+        num_input_vis_obs = 10 * 32 * 32
+        num_output_vis_obs = 1280
+    
+    class student_policy:
+        init_noise_std = 1.0
+        actor_hidden_dims = [512, 256, 128]
+        critic_hidden_dims = [512, 256, 128]
+        activation = 'elu' # can be elu, relu, selu, crelu, lrelu, tanh, sigmoid
+        use_depth_backbone = False
+        backbone_type = "deepgait_coordconv"
+        num_input_vis_obs = 10 * 32 * 32
+        num_output_vis_obs = 1280
         
     class algorithm:
         # training params
@@ -352,6 +385,21 @@ class LeggedRobotCfgPPO(BaseConfig):
         lam = 0.95
         desired_kl = 0.01
         max_grad_norm = 1.
+    class teacher_runner:
+        policy_class_name = 'ActorCritic'
+        algorithm_class_name = 'PPO'
+        num_steps_per_env = 24 # per iteration
+        max_iterations = 1500 # number of policy updates
+
+        # logging
+        save_interval = 500 # check for potential saves every this many iterations
+        experiment_name = 'rough_a1'
+        run_name = ''
+        # load and resume
+        resume = False
+        load_run = -1 # -1 = last run
+        checkpoint = -1 # -1 = last saved model
+        resume_path = None # updated from load_run and chkpt
 
     class depth_encoder:
         if_depth = LeggedRobotCfg.depth.use_camera

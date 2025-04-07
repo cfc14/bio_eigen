@@ -174,6 +174,15 @@ def get_args():
         {"name": "--max_iterations", "type": int, "help": "Maximum number of training iterations. Overrides config file if provided."},
         {"name": "--show_heading", "action": "store_true", "default": False, "help": "visualize heading"},
         {"name": "--rough_terrain", "action": "store_true", "default": False, "help": "whether it is on rough terrain"},
+        {"name": "--no_wandb", "action": "store_true", "default": False, "help": "no wandb"},
+        {"name": "--debug", "action": "store_true", "default": False, "help": "Disable wandb logging"},
+        {"name": "--teacher", "type": str, "help": "Name of the teacher policy to use when distilling"},
+        {"name": "--exptid", "type": str, "help": "exptid"},
+        {"name": "--resumeid", "type": str, "help": "exptid"},
+        {"name": "--daggerid", "type": str, "help": "name of dagger run"},
+        {"name": "--use_camera", "action": "store_true", "default": False, "help": "render camera for distillation"},
+
+
 
 
     ]

@@ -36,11 +36,45 @@ import isaacgym
 from legged_gym.envs import *
 from legged_gym.utils import get_args, task_registry
 import torch
+import wandb
 
 def train(args):
+    args.headless = True
+    timestamp = datetime.now().strftime('%b%d_%H-%M-%S')
+    log_root = os.path.join(LEGGED_GYM_ROOT_DIR, "logs")
+    log_dir = os.path.join(log_root, f"{timestamp}_{args.run_name}")
+
+    # Ensure the directory exists
+    os.makedirs(log_dir, exist_ok=True)
+
+    # Debug mode tweaks
+    if args.debug:
+        mode = "disabled"
+        args.rows = 10
+        args.cols = 8
+        args.num_envs = 64
+    else:
+        mode = "online"
+
+    # Disable wandb if flag is set
+    if args.no_wandb:
+        mode = "disabled"
+
+    # Init wandb (pointing it to the same log root)
+    wandb.init(
+        project=args.run_name,
+        name=None,
+        entity="zhikaiz",
+        mode=mode,
+        dir=log_root  # wandb uses the root; we use subfolders for per-run logs
+    )
+    wandb.save(LEGGED_GYM_ENVS_DIR + "/base/legged_robot_config.py", policy="now")
+    wandb.save(LEGGED_GYM_ENVS_DIR + "/base/legged_robot.py", policy="now")
+
     env, env_cfg = task_registry.make_env(name=args.task, args=args)
     ppo_runner, train_cfg = task_registry.make_alg_runner(env=env, name=args.task, args=args)
     ppo_runner.learn(num_learning_iterations=train_cfg.runner.max_iterations, init_at_random_ep_len=True)
+
 
 if __name__ == '__main__':
     args = get_args()
