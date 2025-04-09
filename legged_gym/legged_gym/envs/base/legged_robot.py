@@ -1564,7 +1564,7 @@ class LeggedRobot(BaseTask):
         # Penalize base height away from target
         base_height = torch.mean(self.root_states[:, 2].unsqueeze(1) - self.measured_heights, dim=1)
         reward = torch.square(base_height - self.cfg.rewards.base_height_target)
-        reward[self.flat_tensor.squeeze()!=0] *= 0.0
+        reward[self.flat_tensor.squeeze()==0] *= 0.0
         return reward
     
     def _reward_torques(self):
@@ -1901,5 +1901,7 @@ class LeggedRobot(BaseTask):
         # # Apply reward only when moving
         # rule_3_reward *= torch.norm(self.commands[:, :2], dim=1) > 0.1  # No reward if stationary
         rule_3_reward[self.flat_tensor.squeeze()!=0] *= 2
+        rule_3_reward[self.flat_tensor.squeeze()==0] *= 0
+
         return rule_3_reward
 
