@@ -1557,7 +1557,7 @@ class LeggedRobot(BaseTask):
         if self.flat_tensor == None:
             self.flat_tensor = torch.ones(self.cfg.env.num_envs, dtype=torch.bool, device=self.device)[:,None]
         reward = torch.sum(torch.square(self.projected_gravity[:, :2]), dim=1)
-        reward[self.flat_tensor.squeeze()!=0] *= 0
+        # reward[self.flat_tensor.squeeze()!=0] *= 0
         return reward
 
     def _reward_base_height(self):
@@ -1814,6 +1814,7 @@ class LeggedRobot(BaseTask):
 
         # Total reward
         rule_1_reward = rule_1_a.float() + rule_1_b.float() + rule_1_c.float()/2.0
+        # rule_1_reward[self.flat_tensor.squeeze()==0] *= 0
         return rule_1_reward
 
 
