@@ -80,7 +80,7 @@ class Terrain:
             choice = np.random.uniform(0, 0.2)
             
             #
-            difficulty = np.random.choice([0.0,0.1,self.cfg.terrain_max_multiplier])
+            difficulty = 0.2#np.random.choice([0.0,0.1,self.cfg.terrain_max_multiplier])
             if not self.cfg.rough_flat:
                 choice = 0
                 difficulty = 0

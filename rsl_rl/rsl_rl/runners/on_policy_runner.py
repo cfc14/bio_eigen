@@ -326,6 +326,7 @@ class OnPolicyRunner:
                         cur_reward_sum += rewards
                         cur_episode_length += 1
                         new_ids = (dones > 0).nonzero(as_tuple=False)
+                        import ipdb;ipdb.set_trace()
                         rewbuffer.extend(cur_reward_sum[new_ids][:, 0].cpu().numpy().tolist())
                         lenbuffer.extend(cur_episode_length[new_ids][:, 0].cpu().numpy().tolist())
                         cur_reward_sum[new_ids] = 0
@@ -354,6 +355,7 @@ class OnPolicyRunner:
             self.alg.depth_encoder.detach_hidden_states()
 
             if self.log_dir is not None:
+                # import ipdb;ipdb.set_trace()
                 self.log_vision(locals())
             if (it-self.start_learning_iteration < 2500 and it % self.save_interval == 0) or \
                (it-self.start_learning_iteration < 5000 and it % (2*self.save_interval) == 0) or \

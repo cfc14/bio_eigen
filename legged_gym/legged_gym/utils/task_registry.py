@@ -150,15 +150,27 @@ class TaskRegistry():
         #save resume path before creating a new log_dir
         # resume = train_cfg.runner.resume
         resume = train_cfg.runner.resume
-
+        # if args.resumeid:
+        #     log_root = LEGGED_GYM_ROOT_DIR + f"/logs/{args.proj_name}/" + args.resumeid
+        #     resume = True
         if resume:
             # load previously trained model
-            #resume_path = get_load_path(log_root, load_run='/home/loganzhang/Eigenbotrl/legged_gym/logs/test/Mar02_09-16-27_Trained_on_flat_terrain_over_Oct28_commanded_vel_0.25-0.37',checkpoint=train_cfg.runner.checkpoint)
+            print(log_root)
+            print(train_cfg.runner.load_run)
+            # load_root = os.path.join(LEGGED_GYM_ROOT_DIR, 'logs', "rough_a1", train_cfg.runner.load_run)
             resume_path = get_load_path(log_root, load_run=train_cfg.runner.load_run, checkpoint=train_cfg.runner.checkpoint)
-            #resume_path = get_load_path(log_root, load_run='/home/loganzhang/Eigenbotrl/legged_gym/logs/test/Mar03_06-14-55_Trained_on_flat_terrain_fresh-no_airtime-parkour_obs_no_yawvel-heading_reward_1_2-high_panelty_xyang_proj_gravity-airtime_0_8',checkpoint=train_cfg.runner.checkpoint)
-            print(f"Loading model from: {resume_path}")
-            #import ipdb; ipdb.set_trace()
             runner.load(resume_path)
+            if not train_cfg.policy.continue_from_last_std:
+                runner.alg.actor_critic.reset_std(train_cfg.policy.init_noise_std, 12, device=runner.device)
+
+        # if resume:
+        #     # load previously trained model
+        #     #resume_path = get_load_path(log_root, load_run='/home/loganzhang/Eigenbotrl/legged_gym/logs/test/Mar02_09-16-27_Trained_on_flat_terrain_over_Oct28_commanded_vel_0.25-0.37',checkpoint=train_cfg.runner.checkpoint)
+        #     resume_path = get_load_path(log_root, load_run=train_cfg.runner.load_run, checkpoint=train_cfg.runner.checkpoint)
+        #     #resume_path = get_load_path(log_root, load_run='/home/loganzhang/Eigenbotrl/legged_gym/logs/test/Mar03_06-14-55_Trained_on_flat_terrain_fresh-no_airtime-parkour_obs_no_yawvel-heading_reward_1_2-high_panelty_xyang_proj_gravity-airtime_0_8',checkpoint=train_cfg.runner.checkpoint)
+        #     print(f"Loading model from: {resume_path}")
+        #     #import ipdb; ipdb.set_trace()
+        #     runner.load(resume_path)
         return runner, train_cfg
 
 # make global task registry
