@@ -206,6 +206,8 @@ class OnPolicyRunner:
                         cur_episode_length += 1
                         
                         new_ids = (dones > 0).nonzero(as_tuple=False)
+                        # if torch.any(dones > 0):
+                        #     import ipdb; ipdb.set_trace()
                         
                         rewbuffer.extend(cur_reward_sum[new_ids][:, 0].cpu().numpy().tolist())
                         rew_explr_buffer.extend(cur_reward_explr_sum[new_ids][:, 0].cpu().numpy().tolist())
