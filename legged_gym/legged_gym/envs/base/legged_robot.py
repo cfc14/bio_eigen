@@ -215,7 +215,7 @@ class LeggedRobot(BaseTask):
         # return clipped obs, clipped states (None), rewards, dones and infos
         clip_obs = self.cfg.normalization.clip_observations
         self.obs_buf = torch.clip(self.obs_buf, -clip_obs, clip_obs)
-        self.extras["delta_yaw_ok"] = self.delta_yaw < 2
+        self.extras["delta_yaw_ok"] = self.delta_yaw < 0.6
         if self.privileged_obs_buf is not None:
             self.privileged_obs_buf = torch.clip(self.privileged_obs_buf, -clip_obs, clip_obs)
         if self.cfg.depth.use_camera and self.global_counter % self.cfg.depth.update_interval == 0:

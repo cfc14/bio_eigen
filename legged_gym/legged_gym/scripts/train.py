@@ -66,7 +66,7 @@ def train(args):
     wandb.init(
         project=args.run_name,
         name=None,
-        entity="zhikaizhang1",
+        entity="zhikaiz",
         mode=mode,
         dir=log_root  # wandb uses the root; we use subfolders for per-run logs
     )
