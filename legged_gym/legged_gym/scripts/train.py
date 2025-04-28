@@ -35,6 +35,7 @@ from datetime import datetime
 import isaacgym
 from legged_gym.envs import *
 from legged_gym.utils import get_args, task_registry
+
 import torch
 import wandb
 
@@ -46,6 +47,7 @@ def train(args):
 
     # Ensure the directory exists
     os.makedirs(log_dir, exist_ok=True)
+
 
     # Debug mode tweaks
     if args.debug:
@@ -64,7 +66,7 @@ def train(args):
     wandb.init(
         project=args.run_name,
         name=None,
-        entity="zhikaiz",
+        entity="zhikaizhang1",
         mode=mode,
         dir=log_root  # wandb uses the root; we use subfolders for per-run logs
     )
@@ -77,5 +79,7 @@ def train(args):
 
 
 if __name__ == '__main__':
+    # torch.cuda.empty_cache()
+
     args = get_args()
     train(args)

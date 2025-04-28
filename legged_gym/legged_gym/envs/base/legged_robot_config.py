@@ -39,7 +39,7 @@ class LeggedRobotCfg(BaseConfig):
         # num_observations = 253
         # num_observations = 258
         n_history = 10
-        n_scan = 132
+        n_scan = 132#187
         n_priv = 3+3 +3
         n_priv_latent = 4 + 1 + 18 +18
         n_proprio = 3+2+1+3+1+18+18+1+1+18+6#3 + 2 + 3 + 4 + 36 + 5
@@ -60,15 +60,15 @@ class LeggedRobotCfg(BaseConfig):
 
 
     class depth:
-        use_camera = True
-        camera_num_envs = 192
+        use_camera = False
+        camera_num_envs = 100
         camera_terrain_num_rows = 10
-        camera_terrain_num_cols = 20
+        camera_terrain_num_cols = 24
 
         position = [0.27, 0, 0.03]  # front camera
         angle = [-5, 5]  # positive pitch down
 
-        update_interval = 5  # 5 works without retraining, 8 worse
+        update_interval = 2  # 5 works without retraining, 8 worse
 
         original = (106, 60)
         resized = (87, 58)
@@ -84,9 +84,16 @@ class LeggedRobotCfg(BaseConfig):
 
     class terrain:
         mesh_type = 'trimesh' # "heightfield" # none, plane, heightfield or trimesh
+        hf2mesh_method = "grid"  # grid or fast
+        max_error = 0.1 # for fast
+        max_error_camera = 2
+        edge_width_thresh = 0.05
+        simplify_grid = False
+
+        horizontal_scale_camera = 0.1
         horizontal_scale = 0.1 # [m]
         vertical_scale = 0.005 # [m]
-        border_size = 25 # [m]
+        border_size = 5 # [m]
         curriculum = True
         static_friction = 1.0
         dynamic_friction = 1.0
@@ -187,7 +194,6 @@ class LeggedRobotCfg(BaseConfig):
         push_robots = True
         push_interval_s = 15
         max_push_vel_xy = 1.
-        action_delay = False
         motor_strength_range = [0.8, 1.2]
         action_buf_len = 8
 
@@ -197,10 +203,9 @@ class LeggedRobotCfg(BaseConfig):
         
 
         randomize_motor = True
-        motor_strength_range = [0.8, 1.2]
 
-        delay_update_global_steps = 24 * 8000
         action_delay = False
+        delay_update_global_steps = 24 * 8000
         action_curr_step = [1, 1]
         action_curr_step_scratch = [0, 1]
         action_delay_view = 1
@@ -220,8 +225,8 @@ class LeggedRobotCfg(BaseConfig):
             # lin_vel_z = -2.5#-1 for flat
             lin_vel_z = -1 # for terrain
 
-            lin_vel_x = 0
-            lin_vel_y = 0
+            # lin_vel_x = -2.0
+            # lin_vel_y = -0.05
             # lin_vel_heading= 2.
             
             # velocity_magnitude=0.5 # why is this here??
@@ -239,7 +244,7 @@ class LeggedRobotCfg(BaseConfig):
             # base_height = -0.25
             # feet_air_time = 0.5#1.
             # feet_air_time = 0.75#1.
-            feet_air_time = 0.7#1.
+            feet_air_time = 0.87#1.
 
 
             # three_feet_on_ground=0.3
@@ -247,11 +252,11 @@ class LeggedRobotCfg(BaseConfig):
             #no_leg_hovering=-0.3
             collision = -1.
             #balanced_leg_contact=0.2
-            stumble = -1.0#-0.5
+            stumble = -1.5#-0.5
             action_rate = -0.01
             stand_still = -0.5
             rule_1 = 0.35
-            # rule_2 = 0.25
+            # # rule_2 = 0.25
             rule_3 = 0.1
 
         only_positive_rewards = False # if true negative total rewards are clipped at zero (avoids early termination problems)
@@ -262,7 +267,7 @@ class LeggedRobotCfg(BaseConfig):
         base_height_target = 0.2
         max_contact_force = 100. # forces above this value are penalized
         vel_tracking_reward = "tracking_goal_vel"
-        torque_limit_hard = 4
+        torque_limit_hard = 5.5#8 # 4, 3.3
         contact_tresh = 0.5
         exp_coeff_rule3 = -10
         stumble_tresh = 2.5
@@ -334,7 +339,6 @@ class LeggedRobotCfgPPO(BaseConfig):
         # rnn_hidden_size = 512
         # rnn_num_layers = 1
         tanh_encoder_output = False
-    
         
     class algorithm:
         # training params
@@ -354,21 +358,6 @@ class LeggedRobotCfgPPO(BaseConfig):
         lam = 0.95
         desired_kl = 0.01
         max_grad_norm = 1.
-    class teacher_runner:
-        policy_class_name = 'ActorCritic'
-        algorithm_class_name = 'PPO'
-        num_steps_per_env = 24 # per iteration
-        max_iterations = 1500 # number of policy updates
-
-        # logging
-        save_interval = 500 # check for potential saves every this many iterations
-        experiment_name = 'rough_a1'
-        run_name = ''
-        # load and resume
-        resume = False
-        load_run = -1 # -1 = last run
-        checkpoint = -1 # -1 = last saved model
-        resume_path = None # updated from load_run and chkpt
 
     class depth_encoder:
         if_depth = LeggedRobotCfg.depth.use_camera

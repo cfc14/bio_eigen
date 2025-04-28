@@ -23,7 +23,7 @@ class RecurrentDepthBackbone(nn.Module):
                                     )
         self.rnn = nn.GRU(input_size=32, hidden_size=512, batch_first=True)
         self.output_mlp = nn.Sequential(
-                                nn.Linear(512, 32+2),
+                                nn.Linear(512, 32), #nn.Linear(512, 32+2), 
                                 last_activation
                             )
         self.hidden_states = None

@@ -132,6 +132,20 @@ def update_cfg_from_args(env_cfg, cfg_train, args):
             env_cfg.env.num_envs = args.num_envs
         if args.rough_terrain is not None:
             env_cfg.terrain.rough_flat = args.rough_terrain
+        if args.delay:
+            env_cfg.domain_rand.action_delay = args.delay
+        if args.use_camera:
+            env_cfg.depth.use_camera = args.use_camera
+        if env_cfg.depth.use_camera and args.headless:
+            env_cfg.terrain.simplify_grid = True
+            env_cfg.env.num_envs = env_cfg.depth.camera_num_envs
+            env_cfg.terrain.num_rows = env_cfg.depth.camera_terrain_num_rows
+            env_cfg.terrain.num_cols = env_cfg.depth.camera_terrain_num_cols
+            env_cfg.terrain.max_error = env_cfg.terrain.max_error_camera
+            env_cfg.terrain.horizontal_scale = env_cfg.terrain.horizontal_scale_camera
+
+            
+
     if cfg_train is not None:
         if args.seed is not None:
             cfg_train.seed = args.seed
@@ -140,6 +154,7 @@ def update_cfg_from_args(env_cfg, cfg_train, args):
             cfg_train.runner.max_iterations = args.max_iterations
         if args.resume:
             cfg_train.runner.resume = args.resume
+            # cfg_train.algorithm.priv_reg_coef_schedual = cfg_train.algorithm.priv_reg_coef_schedual_resume
         if args.experiment_name is not None:
             cfg_train.runner.experiment_name = args.experiment_name
         if args.run_name is not None:
@@ -150,6 +165,10 @@ def update_cfg_from_args(env_cfg, cfg_train, args):
             cfg_train.runner.load_run = args.load_run
         if args.checkpoint is not None:
             cfg_train.runner.checkpoint = args.checkpoint
+        # if args.delay:
+        #     env_cfg.domain_rand.action_delay = args.delay
+        if args.use_camera:
+            cfg_train.depth_encoder.if_depth = args.use_camera
         
         # if args.show_heading is not None:
         #     env_cfg.viewer.show_heading = args.show_heading
@@ -181,6 +200,8 @@ def get_args():
         {"name": "--resumeid", "type": str, "help": "exptid"},
         {"name": "--daggerid", "type": str, "help": "name of dagger run"},
         {"name": "--use_camera", "action": "store_true", "default": False, "help": "render camera for distillation"},
+        {"name": "--delay", "action": "store_true", "default": False, "help": "Add action delay"},
+
 
 
 

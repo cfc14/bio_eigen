@@ -422,6 +422,7 @@ class ActorCriticRMA(nn.Module):
         # seems that we get better performance without init
         # self.init_memory_weights(self.memory_a, 0.001, 0.)
         # self.init_memory_weights(self.memory_c, 0.001, 0.)
+        # import ipdb; ipdb.set_trace()
     
     @staticmethod
     # not used at the moment

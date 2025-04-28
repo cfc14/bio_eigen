@@ -271,6 +271,7 @@ class LeggedRobot(BaseTask):
                 self.depth_buffer[i] = torch.stack([depth_image] * self.cfg.depth.buffer_len, dim=0)
             else:
                 self.depth_buffer[i] = torch.cat([self.depth_buffer[i, 1:], depth_image.to(self.device).unsqueeze(0)], dim=0)
+            # import ipdb;ipdb.set_trace()
 
         self.gym.end_access_image_tensors(self.sim)
     
