@@ -43,7 +43,9 @@ import torch
 def play(args):
     env_cfg, train_cfg = task_registry.get_cfgs(name=args.task)
     # override some parameters for testing
-    env_cfg.env.num_envs = min(env_cfg.env.num_envs, 50)
+    # env_cfg.env.num_envs = min(env_cfg.env.num_envs, 50)
+    env_cfg.env.num_envs = args.num_envs
+
     env_cfg.terrain.num_rows = 5
     env_cfg.terrain.num_cols = 5
     env_cfg.terrain.curriculum = False
@@ -54,7 +56,7 @@ def play(args):
 
     env_cfg.commands.ranges.lin_vel_x = [0.2,0.4]
     env_cfg.viewer.show_heading=args.show_heading
-
+    # import ipdb;ipdb.set_trace()
     # prepare environment
     env, _ = task_registry.make_env(name=args.task, args=args, env_cfg=env_cfg)
     obs = env.get_observations()

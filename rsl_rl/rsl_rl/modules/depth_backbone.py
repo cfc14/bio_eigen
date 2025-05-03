@@ -73,10 +73,13 @@ class DepthOnlyFCBackbone58x87(nn.Module):
         super().__init__()
 
         self.num_frames = num_frames
+        
         activation = nn.ELU()
         self.image_compression = nn.Sequential(
             # [1, 58, 87]
             nn.Conv2d(in_channels=self.num_frames, out_channels=32, kernel_size=5),
+            # import ipdb;ipdb.set_trace()
+
             # [32, 54, 83]
             nn.MaxPool2d(kernel_size=2, stride=2),
             # [32, 27, 41]
@@ -85,11 +88,11 @@ class DepthOnlyFCBackbone58x87(nn.Module):
             activation,
             nn.Flatten(),
             # [32, 25, 39]
-            nn.Linear(64 * 25 * 39, 128),
+            # nn.Linear(64 * 25 * 39, 128),
+            nn.Linear(28224,128),
             activation,
             nn.Linear(128, scandots_output_dim)
         )
-
         if output_activation == "tanh":
             self.output_activation = nn.Tanh()
         else:

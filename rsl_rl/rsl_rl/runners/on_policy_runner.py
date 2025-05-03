@@ -298,15 +298,17 @@ class OnPolicyRunner:
                     scandots_latent_buffer.append(scandots_latent)
                     obs_prop_depth = obs[:, :self.env.cfg.env.n_proprio].clone()
                     # obs_prop_depth[:, 6:8] = 0
-                    ############################### No memory explosions before this point ##########################
+                    ############################## No memory explosions before this point ##########################
                     # print("!!!!!!!!!!!!!!!!!!num_steps_before_crash is: ", num_steps_before_crash)
                     # try:
-                    # import ipdb;ipdb.set_trace()
+                        # import ipdb;ipdb.set_trace()
                     depth_latent = self.alg.depth_encoder(infos["depth"].clone(), obs_prop_depth)  # clone is crucial to avoid in-place operation
-                    # import ipdb;ipdb.set_trace()
+                        # import ipdb;ipdb.set_trace()
                     ############################### one memory explosions is happening before this point ##########################
                     
                     # except:
+                        # print("!!!!!!!!!!!!!!!!!!num_steps_before_crash is: ", num_steps_before_crash)
+
                         # import ipdb;ipdb.set_trace()
                     # depth_latent = depth_latent_and_yaw[:, :-2]
                     # yaw = 1.5*depth_latent_and_yaw[:, -2:]

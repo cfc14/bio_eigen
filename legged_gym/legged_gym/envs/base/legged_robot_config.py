@@ -61,7 +61,7 @@ class LeggedRobotCfg(BaseConfig):
 
     class depth:
         use_camera = False
-        camera_num_envs = 50
+        camera_num_envs = 100
         camera_terrain_num_rows = 10
         camera_terrain_num_cols = 24
 
@@ -71,7 +71,8 @@ class LeggedRobotCfg(BaseConfig):
         update_interval = 2  # 5 works without retraining, 8 worse
 
         original = (106, 60)
-        resized = (87, 58)
+        # resized = (87, 58)
+        resized = (50,50)
         horizontal_fov = 87
         buffer_len = 2
         
@@ -327,11 +328,17 @@ class LeggedRobotCfgPPO(BaseConfig):
         continue_from_last_std = True
         init_noise_std = 1.0
         #Scan rncoder
-        scan_encoder_dims = [256, 128, 32] #[128, 128, 32]
-        priv_encoder_dims = [128,64,20]#[64, 20]
+        # scan_encoder_dims = [256, 128, 32] #[128, 128, 32]
+        # priv_encoder_dims = [128,64,20]#[64, 20]
 
-        actor_hidden_dims = [1024, 512, 128]#[512, 256, 128]
-        critic_hidden_dims = [1024, 512, 128]#[512, 256, 128]
+        # actor_hidden_dims = [1024, 512, 128]#[512, 256, 128]
+        # critic_hidden_dims = [1024, 512, 128]#[512, 256, 128]
+        scan_encoder_dims = [128, 64, 32]
+        priv_encoder_dims = [64, 20]
+
+        actor_hidden_dims = [512, 256, 128]
+        critic_hidden_dims = [512, 256, 128]
+        # priv_encoder_dims = [64, 20]
         # priv_encoder_dims = [64, 20]
         activation = 'elu' # can be elu, relu, selu, crelu, lrelu, tanh, sigmoid
         # only for 'ActorCriticRecurrent':
