@@ -186,7 +186,7 @@ class LeggedRobotCfg(BaseConfig):
         added_mass_range = [-1., 1.]
         push_robots = True
         push_interval_s = 15
-        max_push_vel_xy = 1.
+        max_push_vel_xy = 0.3#1.
         action_delay = False
         motor_strength_range = [0.8, 1.2]
         action_buf_len = 8
@@ -256,13 +256,15 @@ class LeggedRobotCfg(BaseConfig):
 
         only_positive_rewards = False # if true negative total rewards are clipped at zero (avoids early termination problems)
         tracking_sigma = 0.25 # tracking reward = exp(-error^2/sigma)
+        tracking_sigma_vel_experiment = 0.01 # tracking reward = exp(-error^2/sigma)
+
         soft_dof_pos_limit = 1. # percentage of urdf limits, values above this limit are penalized
         soft_dof_vel_limit = 1.5
         soft_torque_limit = 1.
         base_height_target = 0.2
         max_contact_force = 100. # forces above this value are penalized
         vel_tracking_reward = "tracking_goal_vel"
-        torque_limit_hard = 5.5#8 # 4, 3.3
+        torque_limit_hard = 4#8 # 4, 3.3
         contact_tresh = 0.5
         exp_coeff_rule3 = -10
         stumble_tresh = 2.5
@@ -316,6 +318,7 @@ class LeggedRobotCfg(BaseConfig):
             contact_collection = 2 # 0: never, 1: last sub-step, 2: all sub-steps (default=2)
 
 class LeggedRobotCfgPPO(BaseConfig):
+    # Apr01_16-48-43_Rough-fresh-no_slope_terrain-terrain_mult_0_3
     seed = 1
     runner_class_name = 'OnPolicyRunner'
     class policy:

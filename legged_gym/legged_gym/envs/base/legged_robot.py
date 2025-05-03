@@ -916,6 +916,7 @@ class LeggedRobot(BaseTask):
             torques = actions_scaled
         else:
             raise NameError(f"Unknown controller type: {control_type}")
+        
         return torch.clip(torques, -self.torque_limits, self.torque_limits)
 
     def _reset_dofs(self, env_ids):
@@ -1616,7 +1617,10 @@ class LeggedRobot(BaseTask):
         vel_rel_heading = torch.sum(target_vec_norm * cur_vel, dim=-1)
         # import ipdb;ipdb.set_trace()
         lin_vel_error = torch.square(vel_rel_heading - self.commands[:, 0])
-        return torch.exp(-lin_vel_error/self.cfg.rewards.tracking_sigma)
+        # return torch.exp(-lin_vel_error/self.cfg.rewards.tracking_sigma)
+        return torch.exp(-lin_vel_error/self.cfg.rewards.tracking_sigma_vel_experiment)
+
+    
         # return rew
     
     def _reward_tracking_ang_vel(self):
