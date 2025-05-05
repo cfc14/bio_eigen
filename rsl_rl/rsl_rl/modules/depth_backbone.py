@@ -10,16 +10,26 @@ class RecurrentDepthBackbone(nn.Module):
         last_activation = nn.Tanh()
         self.base_backbone = base_backbone
         if env_cfg == None:
+            # self.combination_mlp = nn.Sequential(
+            #                         nn.Linear(32 + 53, 128),
+            #                         activation,
+            #                         nn.Linear(128, 32)
+            #                     )
             self.combination_mlp = nn.Sequential(
-                                    nn.Linear(32 + 53, 128),
+                                    nn.Linear(32 + 53, 256),
                                     activation,
-                                    nn.Linear(128, 32)
+                                    nn.Linear(256, 32)
                                 )
         else:
+            # self.combination_mlp = nn.Sequential(
+            #                             nn.Linear(32 + env_cfg.env.n_proprio, 128),
+            #                             activation,
+            #                             nn.Linear(128, 32)
+            #                         )
             self.combination_mlp = nn.Sequential(
-                                        nn.Linear(32 + env_cfg.env.n_proprio, 128),
+                                        nn.Linear(32 + env_cfg.env.n_proprio, 256),
                                         activation,
-                                        nn.Linear(128, 32)
+                                        nn.Linear(256, 32)
                                     )
         self.rnn = nn.GRU(input_size=32, hidden_size=512, batch_first=True)
         self.output_mlp = nn.Sequential(

@@ -508,17 +508,22 @@ class OnPolicyRunner:
         torch.save(state_dict, path)
 
     def load(self, path, load_optimizer=True):
+        # import ipdb;ipdb.set_trace()
+
         print("*" * 80)
         print("Loading model from {}...".format(path))
         loaded_dict = torch.load(path, map_location=self.device)
         self.alg.actor_critic.load_state_dict(loaded_dict['model_state_dict'])
         self.alg.estimator.load_state_dict(loaded_dict['estimator_state_dict'])
         if self.if_depth:
+
             if 'depth_encoder_state_dict' not in loaded_dict:
                 warnings.warn("'depth_encoder_state_dict' key does not exist, not loading depth encoder...")
+
             else:
                 print("Saved depth encoder detected, loading...")
                 self.alg.depth_encoder.load_state_dict(loaded_dict['depth_encoder_state_dict'])
+
             if 'depth_actor_state_dict' in loaded_dict:
                 print("Saved depth actor detected, loading...")
                 self.alg.depth_actor.load_state_dict(loaded_dict['depth_actor_state_dict'])
@@ -777,22 +782,22 @@ class OnPolicyRunner:
                                locs['num_learning_iterations'] - locs['it']):.1f}s\n""")
         print(log_string)
 
-    def save(self, path, infos=None):
-        torch.save({
-            'model_state_dict': self.alg.actor_critic.state_dict(),
-            'optimizer_state_dict': self.alg.optimizer.state_dict(),
-            'iter': self.current_learning_iteration,
-            'infos': infos,
-            }, path)
+    # def save(self, path, infos=None):
+    #     torch.save({
+    #         'model_state_dict': self.alg.actor_critic.state_dict(),
+    #         'optimizer_state_dict': self.alg.optimizer.state_dict(),
+    #         'iter': self.current_learning_iteration,
+    #         'infos': infos,
+    #         }, path)
 
-    def load(self, path, load_optimizer=True):
-        loaded_dict = torch.load(path)
-        self.alg.actor_critic.load_state_dict(loaded_dict['model_state_dict'])
-        if load_optimizer:
-            self.alg.optimizer.load_state_dict(loaded_dict['optimizer_state_dict'])
-        self.current_learning_iteration = loaded_dict['iter']
-        # import ipdb; ipdb.set_trace()
-        return loaded_dict['infos']
+    # def load(self, path, load_optimizer=True):
+    #     loaded_dict = torch.load(path)
+    #     self.alg.actor_critic.load_state_dict(loaded_dict['model_state_dict'])
+    #     if load_optimizer:
+    #         self.alg.optimizer.load_state_dict(loaded_dict['optimizer_state_dict'])
+    #     self.current_learning_iteration = loaded_dict['iter']
+    #     # import ipdb; ipdb.set_trace()
+    #     return loaded_dict['infos']
 
     def get_inference_policy(self, device=None):
         self.alg.actor_critic.eval() # switch to evaluation mode (dropout for example)

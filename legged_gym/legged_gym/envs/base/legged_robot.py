@@ -47,6 +47,8 @@ from legged_gym.utils.terrain import Terrain
 from legged_gym.utils.math import quat_apply_yaw, wrap_to_pi, torch_rand_sqrt_float
 from legged_gym.utils.helpers import class_to_dict
 from .legged_robot_config import LeggedRobotCfg
+import cv2
+
 
 
 def euler_from_quaternion(quat_angle):
@@ -244,9 +246,9 @@ class LeggedRobot(BaseTask):
         # crop 30 pixels from the left and right and and 20 pixels from bottom and return croped image
         return depth_image[:-2, 4:-4]
 
-    def update_depth_buffer(self):
-        if not self.cfg.depth.use_camera:
-            return
+    # def update_depth_buffer(self):
+    #     if not self.cfg.depth.use_camera:
+    #         return
     def update_depth_buffer(self):
         if not self.cfg.depth.use_camera:
             return
@@ -315,11 +317,12 @@ class LeggedRobot(BaseTask):
         self.last_root_vel[:] = self.root_states[:, 7:13]
 
         self.update_depth_buffer()
-        #  if self.cfg.depth.use_camera:
-        #         window_name = "Depth Image"
-        #         cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
-        #         cv2.imshow("Depth Image", self.depth_buffer[self.lookat_id, -1].cpu().numpy() + 0.5)
-        #         cv2.waitKey(1)
+        if self.cfg.depth.use_camera:
+            window_name = "Depth Image"
+            cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
+            # import ipdb;ipdb.set_trace()
+            cv2.imshow("Depth Image", self.depth_buffer[0, -1].cpu().numpy() + 0.5)
+            cv2.waitKey(1)
 
         if self.viewer and self.enable_viewer_sync and self.debug_viz:
             self._draw_debug_vis()

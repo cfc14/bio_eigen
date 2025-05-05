@@ -68,7 +68,7 @@ class LeggedRobotCfg(BaseConfig):
         position = [0.27, 0, 0.03]  # front camera
         angle = [-5, 5]  # positive pitch down
 
-        update_interval = 2  # 5 works without retraining, 8 worse
+        update_interval = 3#2  # 5 works without retraining, 8 worse
 
         original = (106, 60)
         # resized = (87, 58)
@@ -268,7 +268,7 @@ class LeggedRobotCfg(BaseConfig):
         base_height_target = 0.2
         max_contact_force = 100. # forces above this value are penalized
         vel_tracking_reward = "tracking_goal_vel"
-        torque_limit_hard = 5.5#8 # 4, 3.3
+        torque_limit_hard = 8 # 4, 3.3
         contact_tresh = 0.5
         exp_coeff_rule3 = -10
         stumble_tresh = 2.5
@@ -328,16 +328,16 @@ class LeggedRobotCfgPPO(BaseConfig):
         continue_from_last_std = True
         init_noise_std = 1.0
         #Scan rncoder
-        # scan_encoder_dims = [256, 128, 32] #[128, 128, 32]
-        # priv_encoder_dims = [128,64,20]#[64, 20]
+        scan_encoder_dims = [256, 128, 32] #[128, 128, 32]
+        priv_encoder_dims = [128,64,20]#[64, 20]
 
-        # actor_hidden_dims = [1024, 512, 128]#[512, 256, 128]
-        # critic_hidden_dims = [1024, 512, 128]#[512, 256, 128]
-        scan_encoder_dims = [128, 64, 32]
-        priv_encoder_dims = [64, 20]
+        actor_hidden_dims = [1024, 512, 128]#[512, 256, 128]
+        critic_hidden_dims = [1024, 512, 128]#[512, 256, 128]
+        # scan_encoder_dims = [128, 64, 32]
+        # priv_encoder_dims = [64, 20]
 
-        actor_hidden_dims = [512, 256, 128]
-        critic_hidden_dims = [512, 256, 128]
+        # actor_hidden_dims = [512, 256, 128]
+        # critic_hidden_dims = [512, 256, 128]
         # priv_encoder_dims = [64, 20]
         # priv_encoder_dims = [64, 20]
         activation = 'elu' # can be elu, relu, selu, crelu, lrelu, tanh, sigmoid
@@ -371,6 +371,8 @@ class LeggedRobotCfgPPO(BaseConfig):
         depth_shape = LeggedRobotCfg.depth.resized
         buffer_len = LeggedRobotCfg.depth.buffer_len
         hidden_dims = 512
+        # hidden_dims = 1024
+
         learning_rate = 1.e-3
         num_steps_per_env = LeggedRobotCfg.depth.update_interval * num_steps#LeggedRobotCfg.depth.update_interval * 24
 

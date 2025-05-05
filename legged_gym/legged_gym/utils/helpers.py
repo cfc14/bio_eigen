@@ -201,6 +201,8 @@ def get_args():
         {"name": "--daggerid", "type": str, "help": "name of dagger run"},
         {"name": "--use_camera", "action": "store_true", "default": False, "help": "render camera for distillation"},
         {"name": "--delay", "action": "store_true", "default": False, "help": "Add action delay"},
+        {"name": "--use_jit", "action": "store_true", "default": False, "help": "Load jit script when playing"},
+
 
 
 
