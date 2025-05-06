@@ -264,7 +264,7 @@ class LeggedRobotCfg(BaseConfig):
         base_height_target = 0.2
         max_contact_force = 100. # forces above this value are penalized
         vel_tracking_reward = "tracking_goal_vel"
-        torque_limit_hard = 4#8 # 4, 3.3
+        torque_limit_hard = 8 # 4, 3.3
         contact_tresh = 0.5
         exp_coeff_rule3 = -10
         stumble_tresh = 2.5
