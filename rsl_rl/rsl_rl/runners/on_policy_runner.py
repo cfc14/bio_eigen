@@ -43,6 +43,7 @@ from rsl_rl.modules import ActorCritic, ActorCriticRecurrent, ActorCriticRMA,Est
 from rsl_rl.env import VecEnv
 from copy import copy, deepcopy
 from rsl_rl.modules import DepthOnlyFCBackbone58x87,RecurrentDepthBackbone
+import warnings
 
 
 
@@ -508,7 +509,6 @@ class OnPolicyRunner:
         torch.save(state_dict, path)
 
     def load(self, path, load_optimizer=True):
-        # import ipdb;ipdb.set_trace()
 
         print("*" * 80)
         print("Loading model from {}...".format(path))
