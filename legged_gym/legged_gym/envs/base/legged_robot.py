@@ -317,12 +317,12 @@ class LeggedRobot(BaseTask):
         self.last_root_vel[:] = self.root_states[:, 7:13]
 
         self.update_depth_buffer()
-        if self.cfg.depth.use_camera:
-            window_name = "Depth Image"
-            cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
-            # import ipdb;ipdb.set_trace()
-            cv2.imshow("Depth Image", self.depth_buffer[0, -1].cpu().numpy() + 0.5)
-            cv2.waitKey(1)
+        # if self.cfg.depth.use_camera:
+        #     window_name = "Depth Image"
+        #     cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
+        #     # import ipdb;ipdb.set_trace()
+        #     cv2.imshow("Depth Image", self.depth_buffer[0, -1].cpu().numpy() + 0.5)
+        #     cv2.waitKey(1)
 
         if self.viewer and self.enable_viewer_sync and self.debug_viz:
             self._draw_debug_vis()
