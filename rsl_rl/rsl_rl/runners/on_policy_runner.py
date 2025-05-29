@@ -508,19 +508,21 @@ class OnPolicyRunner:
         torch.save(state_dict, path)
 
     def load(self, path, load_optimizer=True):
-        # import ipdb;ipdb.set_trace()
 
         print("*" * 80)
         print("Loading model from {}...".format(path))
         loaded_dict = torch.load(path, map_location=self.device)
         self.alg.actor_critic.load_state_dict(loaded_dict['model_state_dict'])
         self.alg.estimator.load_state_dict(loaded_dict['estimator_state_dict'])
+
         if self.if_depth:
 
             if 'depth_encoder_state_dict' not in loaded_dict:
                 warnings.warn("'depth_encoder_state_dict' key does not exist, not loading depth encoder...")
 
             else:
+                # import ipdb;ipdb.set_trace()
+                
                 print("Saved depth encoder detected, loading...")
                 self.alg.depth_encoder.load_state_dict(loaded_dict['depth_encoder_state_dict'])
 

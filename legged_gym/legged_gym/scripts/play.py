@@ -49,7 +49,7 @@ def play(args):
     env_cfg.terrain.num_rows = 5
     env_cfg.terrain.num_cols = 5
     env_cfg.terrain.curriculum = False
-    env_cfg.terrain.terrain_max_multiplier = 0.1
+    env_cfg.terrain.terrain_max_multiplier = 0.3
     env_cfg.noise.add_noise = False
     env_cfg.domain_rand.randomize_friction = True
     env_cfg.domain_rand.push_robots = False

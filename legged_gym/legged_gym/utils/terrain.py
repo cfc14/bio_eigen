@@ -104,10 +104,10 @@ class Terrain:
             # Env coordinates in the world
             (i, j) = np.unravel_index(k, (self.cfg.num_rows, self.cfg.num_cols))
 
-            choice = np.random.uniform(0, 0.2)
+            choice = np.random.uniform(0,0.15)#(0, self.cfg.terrain_max_multiplier)
             
             #
-            difficulty = 0.2#np.random.choice([0.0,0.1,self.cfg.terrain_max_multiplier])
+            difficulty = self.cfg.terrain_max_multiplier#np.random.choice([0.0,0.1,self.cfg.terrain_max_multiplier])
             if not self.cfg.rough_flat:
                 choice = 0
                 difficulty = 0
