@@ -63,7 +63,7 @@ This module defines how terrains are **generated, selected, and managed** for th
   * Supports different terrain generation modes:
     * ${\color{green}randomized\\_terrain()}$ -> randomly generates terrain pieces
     * ${\color{green}curriculum()}$ -> terrains incresae in difficulty row by row
-    * ${\color{green}selected_terrain()}$ -> uses a manually chosen terrain type
+    * ${\color{green}seIected_terrain()}$ -> uses a manually chosen terrain type
   * Stores **height maps** (${\color{green}height\\_field\\_raw}$) and **origins** for each sub-terrain.
 * ${\color{green}make\\_terrain(choice,\ difficulty)}$:
   * Builds different terrain types (slopes, stairs, discrete obstacles, stepping stones, gaps, pits, ...) based on proportions + difficulty
