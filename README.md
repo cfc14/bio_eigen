@@ -99,7 +99,7 @@ This module defines how terrains are **generated, selected, and managed** for th
 Example usage:
 * Train eigenbot on flat terrain with 4096 envs:
 ```bash
-python train.py --task eigenbot_flat --num_envs 4096 --experiment_name locomotion_flat
+python3 train.py --task=eigenbot --no_wandb --experiment_name locomotion_flat --num_envs 4096
 ```
 
 # Branch Overview
